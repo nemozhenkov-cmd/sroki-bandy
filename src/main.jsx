@@ -119,7 +119,15 @@ const visibleStores=user?.role==='admin'
   </button>
 ))}</div><div className="stats"><Stat n={counts.expired} t="Просрочено" c="expired" on={()=>setFilter('expired')}/><Stat n={counts.soon} t="Скоро истекает" c="soon" on={()=>setFilter('soon')}/><Stat n={counts.ok} t="В порядке" c="ok" on={()=>setFilter('ok')}/></div><div className="search"><Search size={20}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Поиск товара или штрихкода"/>{q&&<X onClick={()=>setQ('')}/>}</div><div className="list-head"><b>{filter==='all'?'Все товары':filter==='expired'?'Просрочено':filter==='soon'?'Скоро истекает':'В порядке'}</b><button onClick={()=>setFilter('all')}>Сбросить</button></div><div className="list">{filtered.length?filtered.map(x=><Item key={x.id} x={x} onClick={()=>setEdit(x)}/>):<Empty/>}</div></>}
  {tab==='add'&&<Add stores={visibleStores} products={products} user={user} onClose={()=>setTab('home')} onSaved={()=>{loadData(user.id);setTab('home')}}/>}
- {tab==='stats'&&<Stats items={items} stores={visibleStores}/>} {tab==='history'&&<HistoryView/>} {tab==='profile'&&<Profile user={user} session={session} onLogout={()=>supabase.auth.signOut()}/>}<nav><button className={tab==='home'?'sel':''} onClick={()=>setTab('home')}><PackageCheck/>Список</button><button className={tab==='stats'?'sel':''} onClick={()=>setTab('stats')}><BarChart3/>Статистика</button><button className="add" onClick={()=>setTab('add')}><Plus/></button><button className={tab==='history'?'sel':''} onClick={()=>setTab('history')}><History/>История</button><button className={tab==='profile'?'sel':''} onClick={()=>setTab('profile')}><UserRound/>Профиль</button></nav>{edit&&<Edit x={edit} stores={visibleStores} onClose={()=>setEdit(null)} onSaved={()=>{loadData(user.id);setEdit(null)}}/>}{error&&<div className="toast">{error}<X onClick={()=>setError('')}/></div>}</div>
+ {tab==='stats'&&<Stats items={items} stores={visibleStores}/>} {tab==='history'&&<HistoryView/>} {tab==='profile'&&(
+  <Profile
+    user={user}
+    session={session}
+    stores={stores}
+    onStoresChanged={()=>loadData(user.id)}
+    onLogout={()=>supabase.auth.signOut()}
+  />
+)}<nav><button className={tab==='home'?'sel':''} onClick={()=>setTab('home')}><PackageCheck/>Список</button><button className={tab==='stats'?'sel':''} onClick={()=>setTab('stats')}><BarChart3/>Статистика</button><button className="add" onClick={()=>setTab('add')}><Plus/></button><button className={tab==='history'?'sel':''} onClick={()=>setTab('history')}><History/>История</button><button className={tab==='profile'?'sel':''} onClick={()=>setTab('profile')}><UserRound/>Профиль</button></nav>{edit&&<Edit x={edit} stores={visibleStores} onClose={()=>setEdit(null)} onSaved={()=>{loadData(user.id);setEdit(null)}}/>}{error&&<div className="toast">{error}<X onClick={()=>setError('')}/></div>}</div>
 }
 function Splash(){
   return (
@@ -553,6 +561,106 @@ function HistoryView(){
  const [rows,setRows]=useState([]),[loading,setLoading]=useState(true),[msg,setMsg]=useState('');
  useEffect(()=>{(async()=>{const {data,error}=await supabase.from('history').select('*,users(name),expiry_items(products(name),stores(name))').order('created_at',{ascending:false}).limit(100);if(error)setMsg(error.message);else setRows(data||[]);setLoading(false)})()},[]);
  return <section className="page"><h2>История</h2>{loading?<div className="empty"><RefreshCw/><span>Загрузка…</span></div>:msg?<div className="empty"><AlertTriangle/><span>{msg}</span></div>:rows.length?<div className="history-list">{rows.map(r=><div className="history-row" key={r.id}><b>{new Date(r.created_at).toLocaleString('ru-RU')}</b><span>{r.users?.name||'Сотрудник'} · {r.action==='added'?'добавил товар':r.action==='disposed'?'списал товар':'изменил товар'}</span><small>{r.expiry_items?.products?.name||'Товар'} · {r.expiry_items?.stores?.name||'—'}</small></div>)}</div>:<div className="empty"><History size={42}/><b>История пока пуста</b><span>Изменения появятся здесь автоматически.</span></div>}</section>}
-function Profile({user,session,onLogout}){return <section className="page"><h2>Профиль</h2><div className="profile"><UserRound size={42}/><b>{user.name}</b><span>{user.role==='admin'?'Администратор':'Сотрудник'} · {STORES.find(s=>s.id===user.store_id)?.name}</span><small>{session.user.email}</small></div><button className="secondary" onClick={onLogout}><LogOut/>ВЫЙТИ</button></section>}
+function Profile({user,session,stores,onStoresChanged,onLogout}){
+  const [busy,setBusy]=useState(null);
+  const [msg,setMsg]=useState('');
+
+  const toggleStore=async(store)=>{
+    setBusy(store.id);
+    setMsg('');
+
+    const {error}=await supabase
+      .from('stores')
+      .update({is_active:!store.is_active})
+      .eq('id',store.id);
+
+    if(error){
+      setMsg(error.message);
+    }else{
+      await onStoresChanged();
+    }
+
+    setBusy(null);
+  };
+
+  return (
+    <section className="page">
+      <h2>Профиль</h2>
+
+      <div className="profile">
+        <UserRound size={42}/>
+        <b>{user.name}</b>
+
+        <span>
+          {user.role==='admin'
+            ?'Администратор'
+            :user.role==='tm'
+              ?'Территориальный менеджер'
+              :user.role==='manager'
+                ?'Управляющий магазина'
+                :'СРТЗ / РТЗ'
+          }
+          {user.role!=='tm' &&
+            user.role!=='admin' &&
+            user.store_id
+              ?` · ${stores.find(s=>s.id===user.store_id)?.name||user.store_id}`
+              :''
+          }
+        </span>
+
+        <small>{session.user.email}</small>
+      </div>
+
+      {user.role==='admin' && (
+        <>
+          <h3 style={{marginTop:24}}>Магазины</h3>
+
+          <div className="store-admin-list">
+            {stores.map(store=>(
+              <div
+                key={store.id}
+                className="store-admin-row"
+              >
+                <div>
+                  <b>{store.name}</b>
+
+                  <div className="muted">
+                    {store.is_active
+                      ?'🟢 Активен'
+                      :'🔴 Неактивен'
+                    }
+                  </div>
+                </div>
+
+                <button
+                  className={store.is_active?'danger':'secondary'}
+                  disabled={busy===store.id}
+                  onClick={()=>toggleStore(store)}
+                >
+                  {busy===store.id
+                    ?'СОХРАНЕНИЕ…'
+                    :store.is_active
+                      ?'Сделать неактивным'
+                      :'Сделать активным'
+                  }
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {msg&&<p className="msg">{msg}</p>}
+        </>
+      )}
+
+      <button
+        className="secondary"
+        onClick={onLogout}
+      >
+        <LogOut/>
+        ВЫЙТИ
+      </button>
+    </section>
+  );
+}
 if(import.meta.env.PROD && 'serviceWorker' in navigator) {window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));}
 createRoot(document.getElementById('root')).render(<App/>);

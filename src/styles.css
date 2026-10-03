@@ -54,3 +54,25 @@
 .employee-table tbody tr:last-child td{
   border-bottom:none;
 }
+.store-admin-list{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  margin-bottom:24px;
+}
+
+.store-admin-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:14px;
+  border:1px solid #e5e5e5;
+  border-radius:14px;
+  background:#fff;
+}
+
+.store-admin-row button{
+  flex-shrink:0;
+  font-size:12px;
+}
