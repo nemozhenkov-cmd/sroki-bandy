@@ -18,9 +18,60 @@ function localDate(){return new Date().toISOString().slice(0,10)}
 
 function App(){
  const [session,setSession]=useState(null),[loading,setLoading]=useState(true),[tab,setTab]=useState('home'),[store,setStore]=useState('all'),[q,setQ]=useState(''),[filter,setFilter]=useState('all'),[items,setItems]=useState([]),[products,setProducts]=useState([]),[stores,setStores]=useState(STORES),[user,setUser]=useState(null),[edit,setEdit]=useState(null),[scanner,setScanner]=useState(false),[error,setError]=useState('');
- const load=async()=>{if(!supabase){setLoading(false);return} const {data:{session}}=await supabase.auth.getSession();setSession(session);if(session){await loadData(session.user.id)}setLoading(false)};
+ const load=async()=>{
+  if(!supabase){
+    setLoading(false);
+    return;
+  }
+
+  const {data:{session}}=await supabase.auth.getSession();
+
+  setSession(session);
+
+  if(session){
+    await loadData(session.user.id);
+  }
+
+  setLoading(false);
+};
  const loadData=async(uid)=>{const [{data:it,error:e1},{data:p,error:e2},{data:u,error:e3},{data:s,error:e4}]=await Promise.all([supabase.from('expiry_items').select('*,products(*),stores(*),created:created_by(name),updated:updated_by(name)').eq('is_disposed',false).order('expiry_date'),supabase.from('products').select('*'),supabase.from('users').select('*').eq('id',uid).maybeSingle(),supabase.from('stores').select('*').order('name')]);if(e1||e2||e3||e4){setError((e1||e2||e3||e4).message)}else{setItems(it||[]);setProducts(p||[]);setUser(u);if(s?.length)setStores(s)}};
- useEffect(()=>{load(); if(!supabase)return; const ch=supabase.channel('expiry-sync').on('postgres_changes',{event:'*',schema:'public',table:'expiry_items'},()=>loadData(session?.user?.id)).subscribe(); return()=>supabase.removeChannel(ch)},[session?.user?.id]);
+ useEffect(()=>{
+  load();
+
+  if(!supabase)return;
+
+  const {data:{subscription}}=supabase.auth.onAuthStateChange(
+    async (_event,newSession)=>{
+      setSession(newSession);
+
+      if(newSession){
+        await loadData(newSession.user.id);
+      }
+    }
+  );
+
+  const ch=supabase
+    .channel('expiry-sync')
+    .on(
+      'postgres_changes',
+      {
+        event:'*',
+        schema:'public',
+        table:'expiry_items'
+      },
+      ()=>{
+        if(session?.user?.id){
+          loadData(session.user.id);
+        }
+      }
+    )
+    .subscribe();
+
+  return()=>{
+    subscription.unsubscribe();
+    supabase.removeChannel(ch);
+  };
+},[session?.user?.id]);
  if(loading)return <Splash/>; if(!supabase)return <Setup/>; if(!session)return <Auth/>; if(!user)return <Onboard session={session} onDone={()=>loadData(session.user.id)}/>;
  const filtered=items.filter(x=>store==='all'||x.store_id===store).filter(x=>{const st=statusFor(x.expiry_date);return filter==='all'||st===filter}).filter(x=>{const s=(x.products?.name+' '+(x.products?.brand||'')+' '+x.products?.barcode).toLowerCase();return s.includes(q.toLowerCase())});
  const counts={expired:items.filter(x=>statusFor(x.expiry_date)==='expired'&&(store==='all'||x.store_id===store)).length,soon:items.filter(x=>statusFor(x.expiry_date)==='soon'&&(store==='all'||x.store_id===store)).length,ok:items.filter(x=>statusFor(x.expiry_date)==='ok'&&(store==='all'||x.store_id===store)).length};
