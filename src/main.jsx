@@ -354,9 +354,6 @@ function Stats({items,stores}){
   const employeeStats=employees.map(employee=>{
     const rows=history.filter(r=>{
       if(r.user_id!==employee.id)return false;
-
-      if(store==='all')return true;
-
       return r.expiry_items?.store_id===store;
     });
 
@@ -398,78 +395,82 @@ function Stats({items,stores}){
         </div>
 
         <div>
-          <b>
-            {filtered.filter(x=>statusFor(x.expiry_date)==='expired').length}
-          </b>
+          <b>{filtered.filter(x=>statusFor(x.expiry_date)==='expired').length}</b>
           <span>Просрочено</span>
         </div>
 
         <div>
-          <b>
-            {filtered.filter(x=>statusFor(x.expiry_date)==='soon').length}
-          </b>
+          <b>{filtered.filter(x=>statusFor(x.expiry_date)==='soon').length}</b>
           <span>≤ 3 дней</span>
         </div>
 
         <div>
-          <b>
-            {filtered.filter(x=>statusFor(x.expiry_date)==='ok').length}
-          </b>
+          <b>{filtered.filter(x=>statusFor(x.expiry_date)==='ok').length}</b>
           <span>В порядке</span>
         </div>
       </div>
 
-      <h3 style={{marginTop:24}}>Работа сотрудников</h3>
+      {/* Сотрудники только для конкретного магазина */}
+      {store!=='all' && (
+        <>
+          <h3 style={{marginTop:24}}>Работа сотрудников</h3>
 
-      {loading ? (
-        <div className="empty">
-          <RefreshCw/>
-          <span>Загрузка…</span>
-        </div>
-      ) : employeeStats.length ? (
-        <div className="employee-stats">
-          {employeeStats.map(employee=>(
-            <div className="employee-stat" key={employee.id}>
-              <div className="employee-stat-head">
-                <b>{employee.name||'Сотрудник'}</b>
-
-                <span>
-                  {employee.last_seen_at
-                    ? `Последняя активность: ${new Date(employee.last_seen_at).toLocaleString('ru-RU')}`
-                    : 'Последняя активность: нет данных'
-                  }
-                </span>
-              </div>
-
-              <div className="employee-stat-grid">
-                <div>
-                  <b>{employee.added}</b>
-                  <span>Внесено</span>
-                </div>
-
-                <div>
-                  <b>{employee.edited}</b>
-                  <span>Изменено</span>
-                </div>
-
-                <div>
-                  <b>{employee.disposed}</b>
-                  <span>Списано</span>
-                </div>
-              </div>
+          {loading ? (
+            <div className="empty">
+              <RefreshCw/>
+              <span>Загрузка…</span>
             </div>
-          ))}
-        </div>
-      ) : (
-        <div className="empty">
-          <UserRound/>
-          <b>Данных о работе сотрудников пока нет</b>
-        </div>
+          ) : employeeStats.length ? (
+            <div className="employee-table-wrap">
+              <table className="employee-table">
+                <thead>
+                  <tr>
+                    <th>Сотрудник</th>
+                    <th>Внесено</th>
+                    <th>Изменено</th>
+                    <th>Списано</th>
+                    <th>Последняя активность</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {employeeStats.map(employee=>(
+                    <tr key={employee.id}>
+                      <td>
+                        <b>{employee.name||'Сотрудник'}</b>
+                      </td>
+
+                      <td>{employee.added}</td>
+
+                      <td>{employee.edited}</td>
+
+                      <td>{employee.disposed}</td>
+
+                      <td>
+                        {employee.last_seen_at
+                          ? new Date(employee.last_seen_at)
+                              .toLocaleString('ru-RU')
+                          : '—'
+                        }
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="empty">
+              <UserRound/>
+<b>Данных о работе сотрудников пока нет</b>
+            </div>
+          )}
+        </>
       )}
 
       {store==='all' &&
         stores.map(s=>(
-          <div className="store-stat" key={s.id}><b>{s.name}</b>
+          <div className="store-stat" key={s.id}>
+            <b>{s.name}</b>
             <span>
               {items.filter(x=>x.store_id===s.id).length} активных
             </span>
@@ -485,7 +486,8 @@ function Stats({items,stores}){
       )}
     </section>
   );
-}function HistoryView(){
+}
+function HistoryView(){
  const [rows,setRows]=useState([]),[loading,setLoading]=useState(true),[msg,setMsg]=useState('');
  useEffect(()=>{(async()=>{const {data,error}=await supabase.from('history').select('*,users(name),expiry_items(products(name),stores(name))').order('created_at',{ascending:false}).limit(100);if(error)setMsg(error.message);else setRows(data||[]);setLoading(false)})()},[]);
  return <section className="page"><h2>История</h2>{loading?<div className="empty"><RefreshCw/><span>Загрузка…</span></div>:msg?<div className="empty"><AlertTriangle/><span>{msg}</span></div>:rows.length?<div className="history-list">{rows.map(r=><div className="history-row" key={r.id}><b>{new Date(r.created_at).toLocaleString('ru-RU')}</b><span>{r.users?.name||'Сотрудник'} · {r.action==='added'?'добавил товар':r.action==='disposed'?'списал товар':'изменил товар'}</span><small>{r.expiry_items?.products?.name||'Товар'} · {r.expiry_items?.stores?.name||'—'}</small></div>)}</div>:<div className="empty"><History size={42}/><b>История пока пуста</b><span>Изменения появятся здесь автоматически.</span></div>}</section>}

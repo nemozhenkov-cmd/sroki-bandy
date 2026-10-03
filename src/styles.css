@@ -18,3 +18,39 @@
   font-size:11px;
   color:#999;
 }
+.employee-table-wrap{
+  width:100%;
+  overflow-x:auto;
+  margin-top:12px;
+  border-radius:14px;
+  background:#fff;
+}
+
+.employee-table{
+  width:100%;
+  min-width:620px;
+  border-collapse:collapse;
+  font-size:13px;
+}
+
+.employee-table th,
+.employee-table td{
+  padding:11px 10px;
+  text-align:left;
+  border-bottom:1px solid #eee;
+}
+
+.employee-table th{
+  font-size:11px;
+  color:#777;
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+
+.employee-table td{
+  white-space:nowrap;
+}
+
+.employee-table tbody tr:last-child td{
+  border-bottom:none;
+}
