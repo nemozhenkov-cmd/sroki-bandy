@@ -34,11 +34,34 @@ function App(){
 
   setLoading(false);
 };
- const loadData=async(uid)=>{const [{data:it,error:e1},{data:p,error:e2},{data:u,error:e3},{data:s,error:e4}]=await Promise.all([supabase.from('expiry_items').select('*,products(*),stores(*),created:created_by(name),updated:updated_by(name)').eq('is_disposed',false).order('expiry_date'),supabase.from('products').select('*'),supabase.from('users').select('*').eq('id',uid).maybeSingle(),supabase.from('stores').select('*').order('name')]);if(e1||e2||e3||e4){setError((e1||e2||e3||e4).message)}else{setItems(it||[]);setProducts(p||[]);setUser(u);if(u){
-  await supabase
-    .from('users')
-    .update({last_seen_at:new Date().toISOString()})
-    .eq('id',uid);
+ const loadData=async(uid)=>{const [
+  {data:it,error:e1},
+  {data:p,error:e2},
+  {data:u,error:e3},
+  {data:s,error:e4},
+  {data:a,error:e5}
+]=await Promise.all([
+  supabase
+  .from('expiry_items')
+  .select('*,products(*),stores(*),created:created_by(name),updated:updated_by(name)')
+  .eq('is_disposed',false)
+  .order('expiry_date'),
+  supabase.from('products').select('*'),
+  supabase.from('users').select('*').eq('id',uid).maybeSingle(),
+  supabase.from('stores').select('*').order('name'),
+  supabase.from('user_activity').select('user_id,last_seen_at')
+]);if(e1||e2||e3||e4||e5){setError((e1||e2||e3||e4||e5).message)}else{setItems(it||[]);setProducts(p||[]);setUser(u);if(u){
+  const {error:activityError}=await supabase
+    .from('user_activity')
+    .upsert({
+      user_id:uid,
+      last_seen_at:new Date().toISOString()
+    });
+
+  if(activityError){
+    console.error('Ошибка обновления активности:',activityError);
+    setError('Ошибка активности: '+activityError.message);
+  }
 }if(s?.length)setStores(s)}};
  useEffect(()=>{
   load();
@@ -326,9 +349,10 @@ function Stats({items,stores}){
   useEffect(()=>{
     (async()=>{
       const [
-        {data:historyData},
-        {data:usersData}
-      ]=await Promise.all([
+        {data:historyData,error:historyError},
+        {data:employeesData,error:employeesError},
+        {data:userActivity,error:userActivityError}
+      ] = await Promise.all([
         supabase
           .from('history')
           .select('*,users(id,name),expiry_items(store_id,stores(name))')
@@ -337,12 +361,37 @@ function Stats({items,stores}){
 
         supabase
           .from('users')
-          .select('id,name,last_seen_at')
-          .order('name')
+          .select('id,name,role,store_id')
+          .order('name'),
+
+        supabase
+          .from('user_activity')
+          .select('user_id,last_seen_at')
       ]);
 
+      if(historyError){
+        console.error('Ошибка истории:',historyError);
+      }
+
+      if(employeesError){
+        console.error('Ошибка сотрудников:',employeesError);
+      }
+
+      if(userActivityError){
+        console.error('Ошибка активности:',userActivityError);
+      }
+
       setHistory(historyData||[]);
-      setEmployees(usersData||[]);
+      setEmployees(
+        (employeesData||[]).map(employee=>({
+          ...employee,
+          last_seen_at:
+            (userActivity||[]).find(
+              activity=>activity.user_id===employee.id
+            )?.last_seen_at||null
+        }))
+      );
+
       setLoading(false);
     })();
   },[]);
