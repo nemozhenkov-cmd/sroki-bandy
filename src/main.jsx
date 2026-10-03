@@ -90,8 +90,77 @@ function Splash(){
     </div>
   );
 }function Setup(){return <div className="center"><h1>СРОКИ БАНДЫ</h1><p>Добавьте VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY в .env</p></div>}
-function Auth(){const [email,setEmail]=useState(''),[pass,setPass]=useState(''),[name,setName]=useState(''),[reg,setReg]=useState(false),[msg,setMsg]=useState('');const go=async()=>{let r=reg?await supabase.auth.signUp({email,password:pass,options:{data:{name}}}):await supabase.auth.signInWithPassword({email,password:pass});if(r.error)setMsg(r.error.message);else if(reg)setMsg('Проверьте почту для подтверждения аккаунта.');};return <div className="auth"><div className="logo">С</div><h1>СРОКИ БАНДЫ</h1><p>Общий контроль сроков для команды</p>{reg&&<input placeholder="Имя" value={name} onChange={e=>setName(e.target.value)}/>}<input type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)}/><input type="password" placeholder="Пароль" value={pass} onChange={e=>setPass(e.target.value)}/><button className="primary" onClick={go}>{reg?'СОЗДАТЬ АККАУНТ':'ВОЙТИ'}</button>{msg&&<p className="msg">{msg}</p>}<button className="link" onClick={()=>setReg(!reg)}>{reg?'У меня уже есть аккаунт':'Создать аккаунт'}</button></div>}
-function Onboard({session,onDone}){const [name,setName]=useState(session.user.user_metadata?.name||''),[store,setStore]=useState('163'),[busy,setBusy]=useState(false),[msg,setMsg]=useState('');const save=async()=>{const cleanName=name.trim();if(!cleanName){setMsg('Введите имя сотрудника.');return}setBusy(true);setMsg('');try{const check=await supabase.from('users').select('id').eq('id',session.user.id).maybeSingle();if(check.error)throw check.error;let r;if(check.data){r=await supabase.from('users').update({name:cleanName,store_id:store}).eq('id',session.user.id).select().single()}else{r=await supabase.from('users').insert({id:session.user.id,name:cleanName,store_id:store,role:'employee'}).select().single()}if(r.error)throw r.error;onDone()}catch(e){setMsg('Не удалось сохранить профиль: '+(e?.message||'неизвестная ошибка'))}finally{setBusy(false)}};return <div className="auth"><div className="logo">С</div><h2>Профиль сотрудника</h2><input placeholder="Имя" value={name} onChange={e=>setName(e.target.value)}/><select value={store} onChange={e=>setStore(e.target.value)}>{STORES.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select><button className="primary" disabled={busy} onClick={save}>{busy?'СОХРАНЕНИЕ…':'СОХРАНИТЬ'}</button>{msg&&<p className="msg">{msg}</p>}</div>}
+function Auth(){
+  const [email,setEmail]=useState('');
+  const [pass,setPass]=useState('');
+  const [name,setName]=useState('');
+  const [reg,setReg]=useState(false);
+  const [msg,setMsg]=useState('');
+
+  const go=async()=>{
+    let r=reg
+      ?await supabase.auth.signUp({
+          email,
+          password:pass,
+          options:{data:{name}}
+        })
+      :await supabase.auth.signInWithPassword({
+          email,
+          password:pass
+        });
+
+    if(r.error){
+      setMsg(r.error.message);
+    }else if(reg){
+      setMsg('Проверьте почту для подтверждения аккаунта.');
+    }
+  };
+
+  return (
+    <div className="auth">
+      <div className="logo">С</div>
+
+      <h1>Банда Видова</h1>
+      <p>Контроль сроков годности</p>
+
+      {reg&&
+        <input
+          placeholder="Имя"
+          value={name}
+          onChange={e=>setName(e.target.value)}
+        />
+      }
+
+      <input
+        type="email"
+        placeholder="Email"
+        value={email}
+        onChange={e=>setEmail(e.target.value)}
+      />
+
+      <input
+        type="password"
+        placeholder="Пароль"
+        value={pass}
+        onChange={e=>setPass(e.target.value)}
+      />
+
+      <button className="primary" onClick={go}>
+        {reg?'СОЗДАТЬ АККАУНТ':'ВОЙТИ'}
+      </button>
+
+      {msg&&<p className="msg">{msg}</p>}
+
+      <button className="link" onClick={()=>setReg(!reg)}>
+        {reg?'У меня уже есть аккаунт':'Создать аккаунт'}
+      </button>
+
+      <div className="auth-author">
+        Автор: Неможенко В. 2787320
+      </div>
+    </div>
+  );
+}function Onboard({session,onDone}){const [name,setName]=useState(session.user.user_metadata?.name||''),[store,setStore]=useState('163'),[busy,setBusy]=useState(false),[msg,setMsg]=useState('');const save=async()=>{const cleanName=name.trim();if(!cleanName){setMsg('Введите имя сотрудника.');return}setBusy(true);setMsg('');try{const check=await supabase.from('users').select('id').eq('id',session.user.id).maybeSingle();if(check.error)throw check.error;let r;if(check.data){r=await supabase.from('users').update({name:cleanName,store_id:store}).eq('id',session.user.id).select().single()}else{r=await supabase.from('users').insert({id:session.user.id,name:cleanName,store_id:store,role:'employee'}).select().single()}if(r.error)throw r.error;onDone()}catch(e){setMsg('Не удалось сохранить профиль: '+(e?.message||'неизвестная ошибка'))}finally{setBusy(false)}};return <div className="auth"><div className="logo">С</div><h2>Профиль сотрудника</h2><input placeholder="Имя" value={name} onChange={e=>setName(e.target.value)}/><select value={store} onChange={e=>setStore(e.target.value)}>{STORES.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select><button className="primary" disabled={busy} onClick={save}>{busy?'СОХРАНЕНИЕ…':'СОХРАНИТЬ'}</button>{msg&&<p className="msg">{msg}</p>}</div>}
 function Stat({n,t,c,on}){return <button className={'stat '+c} onClick={on}><b>{n}</b><span>{t}</span></button>}
 function Item({x,onClick}){const s=statusFor(x.expiry_date);return <button className="item" onClick={onClick}><div className={'dot '+s}/><div className="itemmain"><h3>{x.products?.name||'Без названия'}</h3><div className="muted">EAN {x.products?.barcode} · {x.stores?.name}</div><strong>Срок: {fmt(x.expiry_date)}</strong><div className="days">{statusText(x.expiry_date)}</div><div className="muted">Количество: {x.quantity} · Добавил: {x.created?.name||'—'}</div></div></button>}
 function Empty(){return <div className="empty"><PackageCheck size={42}/><b>Ничего не найдено</b><span>Попробуйте изменить фильтр или добавить товар.</span></div>}
