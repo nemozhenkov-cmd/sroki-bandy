@@ -50,13 +50,9 @@ function App(){
   supabase.from('users').select('*').eq('id',uid).maybeSingle(),
   supabase.from('stores').select('*').order('name'),
   supabase.from('user_activity').select('user_id,last_seen_at')
-]);if(e1||e2||e3||e4||e5){setError((e1||e2||e3||e4||e5).message)}else{setItems(it||[]);setProducts(p||[]);setUser(u);if(u){
+]);if(e1||e2||e3||e4||e5){setError((e1||e2||e3||e4||e5).message)}else{setItems(it||[]);setProducts(p||[]);setUser(u);if(u)if(u){
   const {error:activityError}=await supabase
-    .from('user_activity')
-    .upsert({
-      user_id:uid,
-      last_seen_at:new Date().toISOString()
-    });
+    .rpc('touch_user_activity');
 
   if(activityError){
     console.error('Ошибка обновления активности:',activityError);
