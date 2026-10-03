@@ -312,7 +312,83 @@ function Edit({x,stores,onClose,onSaved}){const [expiry,setExpiry]=useState(x.ex
  const save=async()=>{setBusy(true);const {data:{user}}=await supabase.auth.getUser();const r=await supabase.from('expiry_items').update({expiry_date:expiry,quantity:qty,store_id:store,note,updated_by:user.id}).eq('id',x.id);if(r.error)setMsg(r.error.message);else onSaved();setBusy(false)};
  const dispose=async()=>{setBusy(true);setMsg('');const {data:{user}}=await supabase.auth.getUser();const {error}=await supabase.from('expiry_items').update({is_disposed:true,updated_by:user.id,updated_at:new Date().toISOString()}).eq('id',x.id).eq('is_disposed',false);if(error){setMsg(error.message);setBusy(false);return}onSaved();};
  return <div className="modal"><div className="dialog"><div className="sheethead"><h2>{x.products?.name}</h2><button onClick={onClose}><X/></button></div><div className="muted">EAN {x.products?.barcode}</div><label>Срок<input type="date" value={expiry} onChange={e=>setExpiry(e.target.value)}/></label><label>Количество<input type="number" min="1" value={qty} onChange={e=>setQty(+e.target.value)}/></label><label>Магазин<select value={store} onChange={e=>setStore(e.target.value)}>{stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Комментарий"/><button className="primary" disabled={busy} onClick={save}>{busy?'СОХРАНЕНИЕ…':'СОХРАНИТЬ ИЗМЕНЕНИЯ'}</button><button className="danger" disabled={busy} onClick={dispose}><Trash2/>СПИСАТЬ</button>{msg&&<p className="msg">{msg}</p>}</div></div>}
-function Stats({items,stores}){return <section className="page"><h2>Статистика</h2><div className="bigstats"><div><b>{items.length}</b><span>Активных</span></div><div><b>{items.filter(x=>statusFor(x.expiry_date)==='expired').length}</b><span>Просрочено</span></div><div><b>{items.filter(x=>statusFor(x.expiry_date)==='soon').length}</b><span>≤ 3 дней</span></div><div><b>{items.filter(x=>statusFor(x.expiry_date)==='ok').length}</b><span>В порядке</span></div></div>{stores.map(s=><div className="store-stat" key={s.id}><b>{s.name}</b><span>{items.filter(x=>x.store_id===s.id).length} активных</span></div>)}</section>}
+function Stats({items,stores}){
+ const [store,setStore]=useState('all');
+
+ const filtered=store==='all'
+   ?items
+   :items.filter(x=>x.store_id===store);
+
+ return (
+  <section className="page">
+   <h2>Статистика</h2>
+
+   <div className="store-tabs">
+    <button
+     className={store==='all'?'active':''}
+     onClick={()=>setStore('all')}
+    >
+     ВСЕ
+    </button>
+
+    {stores.map(s=>(
+     <button
+      key={s.id}
+      className={store===s.id?'active':''}
+      onClick={()=>setStore(s.id)}
+     >
+      {s.name.toUpperCase()}
+     </button>
+    ))}
+   </div>
+
+   <div className="bigstats">
+    <div>
+     <b>{filtered.length}</b>
+     <span>Активных</span>
+    </div>
+
+    <div>
+     <b>
+      {filtered.filter(x=>statusFor(x.expiry_date)==='expired').length}
+     </b>
+     <span>Просрочено</span>
+    </div>
+
+    <div>
+     <b>
+      {filtered.filter(x=>statusFor(x.expiry_date)==='soon').length}
+     </b>
+     <span>≤ 3 дней</span>
+    </div>
+
+    <div>
+     <b>
+      {filtered.filter(x=>statusFor(x.expiry_date)==='ok').length}
+     </b>
+     <span>В порядке</span>
+    </div>
+   </div>
+
+   {store==='all'
+    ?stores.map(s=>(
+      <div className="store-stat" key={s.id}>
+       <b>{s.name}</b>
+       <span>
+        {items.filter(x=>x.store_id===s.id).length} активных
+       </span>
+      </div>
+     ))
+    :(
+      <div className="store-stat">
+       <b>{stores.find(s=>s.id===store)?.name}</b>
+       <span>{filtered.length} активных</span>
+      </div>
+     )
+   }
+  </section>
+ );
+}
 function HistoryView(){
  const [rows,setRows]=useState([]),[loading,setLoading]=useState(true),[msg,setMsg]=useState('');
  useEffect(()=>{(async()=>{const {data,error}=await supabase.from('history').select('*,users(name),expiry_items(products(name),stores(name))').order('created_at',{ascending:false}).limit(100);if(error)setMsg(error.message);else setRows(data||[]);setLoading(false)})()},[]);
