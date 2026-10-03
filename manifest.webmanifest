@@ -1,0 +1,15 @@
+{
+  "name":"СРОКИ БАНДЫ",
+  "short_name":"СРОКИ БАНДЫ",
+  "start_url":"/",
+  "scope":"/",
+  "display":"standalone",
+  "orientation":"portrait",
+  "background_color":"#f7f7f5",
+  "theme_color":"#f7c600",
+  "lang":"ru",
+  "description":"Контроль сроков годности для команды двух магазинов",
+  "icons":[
+    {"src":"/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}
+  ]
+}
