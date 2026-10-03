@@ -1,6 +1,6 @@
 {
-  "name":"СРОКИ БАНДЫ",
-  "short_name":"СРОКИ БАНДЫ",
+  "name":"КОНТРОЛЬ СГ",
+  "short_name":"КОНТРОЛЬ СГ",
   "start_url":"/",
   "scope":"/",
   "display":"standalone",
@@ -8,7 +8,7 @@
   "background_color":"#f7f7f5",
   "theme_color":"#f7c600",
   "lang":"ru",
-  "description":"Контроль сроков годности для команды двух магазинов",
+  "description":"Контроль сроков годности для банды магазинов ЧИЖИК",
   "icons":[
     {"src":"/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}
   ]
