@@ -40,41 +40,107 @@ function Add({stores,products,user,onClose,onSaved}){
  const [barcode,setBarcode]=useState(''),[name,setName]=useState(''),[brand,setBrand]=useState(''),[expiry,setExpiry]=useState(localDate()),[qty,setQty]=useState(1),[store,setStore]=useState(user.store_id),[note,setNote]=useState(''),[busy,setBusy]=useState(false),[msg,setMsg]=useState(''),[scanning,setScanning]=useState(false),videoRef=useRef(null),scannerRef=useRef(null);
  useEffect(()=>()=>{scannerRef.current?.stop?.();scannerRef.current?.reset?.();scannerRef.current=null},[]);
  const scan=async()=>{
-   setMsg('');
-   if(!window.isSecureContext){setMsg('Камера доступна только через HTTPS или localhost. Откройте приложение через localhost либо HTTPS.');return}
-   if(!navigator.mediaDevices?.getUserMedia){setMsg('Браузер не предоставляет доступ к камере. Используйте Chrome или Samsung Internet.');return}
-   try{
-     scannerRef.current?.reset?.();
-     const hints=new Map();
-     hints.set(DecodeHintType.POSSIBLE_FORMATS,[BarcodeFormat.EAN_13, BarcodeFormat.EAN_8,BarcodeFormat.UPC_A,BarcodeFormat.UPC_E]);
-     hints.set(DecodeHintType.TRY_HARDER,true);
-     const reader=new BrowserMultiFormatReader(hints);
-     scannerRef.current=reader;
-     setScanning(true);
-     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-     if(!videoRef.current) throw new Error('Не удалось подготовить окно камеры.');
-     const devices=await BrowserMultiFormatReader.listVideoInputDevices();
-     const back=devices.find(d=>/back|rear|environment|задн/i.test(d.label));
-     const deviceId=back?.deviceId || devices[devices.length-1]?.deviceId;
-     if(!deviceId) throw new Error('Камера не найдена.');
-     const controls=await reader.decodeFromVideoDevice(deviceId,videoRef.current,(result,err)=>{
-       if(!result) return;
-       const code=result.getText().trim();
-       if(!code) return;
-       try{controls.stop?.()}catch{}
-       try{reader.reset()}catch{}
-       scannerRef.current=null;
-       setScanning(false);
-       setBarcode(code);
-       find(code);
-     });
-     scannerRef.current=controls;
-   }catch(e){
-     scannerRef.current?.stop?.();scannerRef.current?.reset?.();scannerRef.current=null;setScanning(false);
-     const m=e?.message||'';
-     setMsg(m.toLowerCase().includes('permission')?'Нет доступа к камере. Разрешите камеру для этого сайта в настройках браузера.':'Не удалось запустить сканер: '+m);
-   }
- };
+  setMsg('');
+
+  if(!window.isSecureContext){
+    setMsg('Камера доступна только через HTTPS или localhost.');
+    return;
+  }
+
+  if(!navigator.mediaDevices?.getUserMedia){
+    setMsg('Браузер не предоставляет доступ к камере. Используйте Chrome или Samsung Internet.');
+    return;
+  }
+
+  try{
+    // Останавливаем предыдущий сканер
+    try{scannerRef.current?.stop?.()}catch{}
+    try{scannerRef.current?.reset?.()}catch{}
+    scannerRef.current=null;
+
+    const hints=new Map();
+    hints.set(
+      DecodeHintType.POSSIBLE_FORMATS,
+      [
+        BarcodeFormat.EAN_13,
+        BarcodeFormat.EAN_8,
+        BarcodeFormat.UPC_A,
+        BarcodeFormat.UPC_E
+      ]
+    );
+    hints.set(DecodeHintType.TRY_HARDER,true);
+
+    const reader=new BrowserMultiFormatReader(hints);
+    scannerRef.current=reader;
+
+    setScanning(true);
+
+    // Ждём появления <video>
+    await new Promise(resolve=>{
+      requestAnimationFrame(()=>{
+        requestAnimationFrame(resolve);
+      });
+    });
+
+    if(!videoRef.current){
+      throw new Error('Не удалось подготовить окно камеры.');
+    }
+
+    // ВАЖНО:
+    // Не ищем список устройств заранее.
+    // ZXing сам запрашивает доступ к камере.
+    const constraints={
+      video:{
+        facingMode:{ideal:'environment'},
+        width:{ideal:1280},
+        height:{ideal:720}
+      }
+    };
+
+    const controls=await reader.decodeFromConstraints(
+      constraints,
+      videoRef.current,
+      (result,error)=>{
+        if(!result)return;
+
+        const code=result.getText().trim();
+        if(!code)return;
+
+        try{controls.stop?.()}catch{}
+        try{reader.reset()}catch{}
+
+        scannerRef.current=null;
+        setScanning(false);
+        setBarcode(code);
+
+        find(code);
+      }
+    );
+
+    scannerRef.current=controls;
+
+  }catch(e){
+    console.error('Scanner error:',e);
+
+    try{scannerRef.current?.stop?.()}catch{}
+    try{scannerRef.current?.reset?.()}catch{}
+
+    scannerRef.current=null;
+    setScanning(false);
+
+    const m=e?.message||'';
+
+    if(
+      m.toLowerCase().includes('permission') ||
+      m.toLowerCase().includes('notallowed') ||
+      m.toLowerCase().includes('denied')
+    ){
+      setMsg('Нет доступа к камере. Разрешите камеру для этого сайта в настройках браузера.');
+    }else{
+      setMsg('Не удалось запустить камеру: '+m);
+    }
+  }
+};
  const find = async (rawCode) => {
   const code = String(rawCode || '').replace(/\D/g, '');
   setBarcode(code);
