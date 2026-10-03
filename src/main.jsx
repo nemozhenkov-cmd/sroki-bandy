@@ -571,9 +571,9 @@ function EmployeeManagement({user,stores,onChanged}){
     setLoading(true);
 
     const {data,error}=await supabase
-      .from('users')
-      .select('id,name,email,role,store_id')
-      .order('name');
+  .from('users')
+  .select('id,name,role,store_id')
+  .order('name');
 
     if(error){
       setMsg(error.message);
