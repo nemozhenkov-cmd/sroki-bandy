@@ -34,7 +34,12 @@ function App(){
 
   setLoading(false);
 };
- const loadData=async(uid)=>{const [{data:it,error:e1},{data:p,error:e2},{data:u,error:e3},{data:s,error:e4}]=await Promise.all([supabase.from('expiry_items').select('*,products(*),stores(*),created:created_by(name),updated:updated_by(name)').eq('is_disposed',false).order('expiry_date'),supabase.from('products').select('*'),supabase.from('users').select('*').eq('id',uid).maybeSingle(),supabase.from('stores').select('*').order('name')]);if(e1||e2||e3||e4){setError((e1||e2||e3||e4).message)}else{setItems(it||[]);setProducts(p||[]);setUser(u);if(s?.length)setStores(s)}};
+ const loadData=async(uid)=>{const [{data:it,error:e1},{data:p,error:e2},{data:u,error:e3},{data:s,error:e4}]=await Promise.all([supabase.from('expiry_items').select('*,products(*),stores(*),created:created_by(name),updated:updated_by(name)').eq('is_disposed',false).order('expiry_date'),supabase.from('products').select('*'),supabase.from('users').select('*').eq('id',uid).maybeSingle(),supabase.from('stores').select('*').order('name')]);if(e1||e2||e3||e4){setError((e1||e2||e3||e4).message)}else{setItems(it||[]);setProducts(p||[]);setUser(u);if(u){
+  await supabase
+    .from('users')
+    .update({last_seen_at:new Date().toISOString()})
+    .eq('id',uid);
+}if(s?.length)setStores(s)}};
  useEffect(()=>{
   load();
 
@@ -313,83 +318,174 @@ function Edit({x,stores,onClose,onSaved}){const [expiry,setExpiry]=useState(x.ex
  const dispose=async()=>{setBusy(true);setMsg('');const {data:{user}}=await supabase.auth.getUser();const {error}=await supabase.from('expiry_items').update({is_disposed:true,updated_by:user.id,updated_at:new Date().toISOString()}).eq('id',x.id).eq('is_disposed',false);if(error){setMsg(error.message);setBusy(false);return}onSaved();};
  return <div className="modal"><div className="dialog"><div className="sheethead"><h2>{x.products?.name}</h2><button onClick={onClose}><X/></button></div><div className="muted">EAN {x.products?.barcode}</div><label>Срок<input type="date" value={expiry} onChange={e=>setExpiry(e.target.value)}/></label><label>Количество<input type="number" min="1" value={qty} onChange={e=>setQty(+e.target.value)}/></label><label>Магазин<select value={store} onChange={e=>setStore(e.target.value)}>{stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Комментарий"/><button className="primary" disabled={busy} onClick={save}>{busy?'СОХРАНЕНИЕ…':'СОХРАНИТЬ ИЗМЕНЕНИЯ'}</button><button className="danger" disabled={busy} onClick={dispose}><Trash2/>СПИСАТЬ</button>{msg&&<p className="msg">{msg}</p>}</div></div>}
 function Stats({items,stores}){
- const [store,setStore]=useState('all');
+  const [store,setStore]=useState('all');
+  const [history,setHistory]=useState([]);
+  const [employees,setEmployees]=useState([]);
+  const [loading,setLoading]=useState(true);
 
- const filtered=store==='all'
-   ?items
-   :items.filter(x=>x.store_id===store);
+  useEffect(()=>{
+    (async()=>{
+      const [
+        {data:historyData},
+        {data:usersData}
+      ]=await Promise.all([
+        supabase
+          .from('history')
+          .select('*,users(id,name),expiry_items(store_id,stores(name))')
+          .order('created_at',{ascending:false})
+          .limit(1000),
 
- return (
-  <section className="page">
-   <h2>Статистика</h2>
+        supabase
+          .from('users')
+          .select('id,name,last_seen_at')
+          .order('name')
+      ]);
 
-   <div className="store-tabs">
-    <button
-     className={store==='all'?'active':''}
-     onClick={()=>setStore('all')}
-    >
-     ВСЕ
-    </button>
+      setHistory(historyData||[]);
+      setEmployees(usersData||[]);
+      setLoading(false);
+    })();
+  },[]);
 
-    {stores.map(s=>(
-     <button
-      key={s.id}
-      className={store===s.id?'active':''}
-      onClick={()=>setStore(s.id)}
-     >
-      {s.name.toUpperCase()}
-     </button>
-    ))}
-   </div>
+  const filtered=store==='all'
+    ?items
+    :items.filter(x=>x.store_id===store);
 
-   <div className="bigstats">
-    <div>
-     <b>{filtered.length}</b>
-     <span>Активных</span>
-    </div>
+  const employeeStats=employees.map(employee=>{
+    const rows=history.filter(r=>{
+      if(r.user_id!==employee.id)return false;
 
-    <div>
-     <b>
-      {filtered.filter(x=>statusFor(x.expiry_date)==='expired').length}
-     </b>
-     <span>Просрочено</span>
-    </div>
+      if(store==='all')return true;
 
-    <div>
-     <b>
-      {filtered.filter(x=>statusFor(x.expiry_date)==='soon').length}
-     </b>
-     <span>≤ 3 дней</span>
-    </div>
+      return r.expiry_items?.store_id===store;
+    });
 
-    <div>
-     <b>
-      {filtered.filter(x=>statusFor(x.expiry_date)==='ok').length}
-     </b>
-     <span>В порядке</span>
-    </div>
-   </div>
+    return {
+      ...employee,
+      added:rows.filter(r=>r.action==='added').length,
+      edited:rows.filter(r=>r.action==='edited').length,
+      disposed:rows.filter(r=>r.action==='disposed').length
+    };
+  }).filter(e=>e.added||e.edited||e.disposed||e.last_seen_at);
 
-   {store==='all'
-    ?stores.map(s=>(
-      <div className="store-stat" key={s.id}>
-       <b>{s.name}</b>
-       <span>
-        {items.filter(x=>x.store_id===s.id).length} активных
-       </span>
+  return (
+    <section className="page">
+      <h2>Статистика</h2>
+
+      <div className="store-tabs">
+        <button
+          className={store==='all'?'active':''}
+          onClick={()=>setStore('all')}
+        >
+          ВСЕ
+        </button>
+
+        {stores.map(s=>(
+          <button
+            key={s.id}
+            className={store===s.id?'active':''}
+            onClick={()=>setStore(s.id)}
+          >
+            {s.name.toUpperCase()}
+          </button>
+        ))}
       </div>
-     ))
-    :(
-      <div className="store-stat">
-       <b>{stores.find(s=>s.id===store)?.name}</b>
-       <span>{filtered.length} активных</span>
+
+      <div className="bigstats">
+        <div>
+          <b>{filtered.length}</b>
+          <span>Активных</span>
+        </div>
+
+        <div>
+          <b>
+            {filtered.filter(x=>statusFor(x.expiry_date)==='expired').length}
+          </b>
+          <span>Просрочено</span>
+        </div>
+
+        <div>
+          <b>
+            {filtered.filter(x=>statusFor(x.expiry_date)==='soon').length}
+          </b>
+          <span>≤ 3 дней</span>
+        </div>
+
+        <div>
+          <b>
+            {filtered.filter(x=>statusFor(x.expiry_date)==='ok').length}
+          </b>
+          <span>В порядке</span>
+        </div>
       </div>
-     )
-   }
-  </section>
- );
-}
-function HistoryView(){
+
+      <h3 style={{marginTop:24}}>Работа сотрудников</h3>
+
+      {loading ? (
+        <div className="empty">
+          <RefreshCw/>
+          <span>Загрузка…</span>
+        </div>
+      ) : employeeStats.length ? (
+        <div className="employee-stats">
+          {employeeStats.map(employee=>(
+            <div className="employee-stat" key={employee.id}>
+              <div className="employee-stat-head">
+                <b>{employee.name||'Сотрудник'}</b>
+
+                <span>
+                  {employee.last_seen_at
+                    ? `Последняя активность: ${new Date(employee.last_seen_at).toLocaleString('ru-RU')}`
+                    : 'Последняя активность: нет данных'
+                  }
+                </span>
+              </div>
+
+              <div className="employee-stat-grid">
+                <div>
+                  <b>{employee.added}</b>
+                  <span>Внесено</span>
+                </div>
+
+                <div>
+                  <b>{employee.edited}</b>
+                  <span>Изменено</span>
+                </div>
+
+                <div>
+                  <b>{employee.disposed}</b>
+                  <span>Списано</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="empty">
+          <UserRound/>
+          <b>Данных о работе сотрудников пока нет</b>
+        </div>
+      )}
+
+      {store==='all' &&
+        stores.map(s=>(
+          <div className="store-stat" key={s.id}><b>{s.name}</b>
+            <span>
+              {items.filter(x=>x.store_id===s.id).length} активных
+            </span>
+          </div>
+        ))
+      }
+
+      {store!=='all' && (
+        <div className="store-stat">
+          <b>{stores.find(s=>s.id===store)?.name}</b>
+          <span>{filtered.length} активных</span>
+        </div>
+      )}
+    </section>
+  );
+}function HistoryView(){
  const [rows,setRows]=useState([]),[loading,setLoading]=useState(true),[msg,setMsg]=useState('');
  useEffect(()=>{(async()=>{const {data,error}=await supabase.from('history').select('*,users(name),expiry_items(products(name),stores(name))').order('created_at',{ascending:false}).limit(100);if(error)setMsg(error.message);else setRows(data||[]);setLoading(false)})()},[]);
  return <section className="page"><h2>История</h2>{loading?<div className="empty"><RefreshCw/><span>Загрузка…</span></div>:msg?<div className="empty"><AlertTriangle/><span>{msg}</span></div>:rows.length?<div className="history-list">{rows.map(r=><div className="history-row" key={r.id}><b>{new Date(r.created_at).toLocaleString('ru-RU')}</b><span>{r.users?.name||'Сотрудник'} · {r.action==='added'?'добавил товар':r.action==='disposed'?'списал товар':'изменил товар'}</span><small>{r.expiry_items?.products?.name||'Товар'} · {r.expiry_items?.stores?.name||'—'}</small></div>)}</div>:<div className="empty"><History size={42}/><b>История пока пуста</b><span>Изменения появятся здесь автоматически.</span></div>}</section>}
