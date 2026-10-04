@@ -230,12 +230,12 @@ function Add({stores,products,user,onClose,onSaved}){
   }
 
   try{
-    // Останавливаем предыдущий сканер
     try{scannerRef.current?.stop?.()}catch{}
     try{scannerRef.current?.reset?.()}catch{}
     scannerRef.current=null;
 
     const hints=new Map();
+
     hints.set(
       DecodeHintType.POSSIBLE_FORMATS,
       [
@@ -245,6 +245,7 @@ function Add({stores,products,user,onClose,onSaved}){
         BarcodeFormat.UPC_E
       ]
     );
+
     hints.set(DecodeHintType.TRY_HARDER,true);
 
     const reader=new BrowserMultiFormatReader(hints);
@@ -252,7 +253,6 @@ function Add({stores,products,user,onClose,onSaved}){
 
     setScanning(true);
 
-    // Ждём появления <video>
     await new Promise(resolve=>{
       requestAnimationFrame(()=>{
         requestAnimationFrame(resolve);
@@ -263,36 +263,78 @@ function Add({stores,products,user,onClose,onSaved}){
       throw new Error('Не удалось подготовить окно камеры.');
     }
 
-    // ВАЖНО:
-    // Не ищем список устройств заранее.
-    // ZXing сам запрашивает доступ к камере.
     const constraints={
+      audio:false,
       video:{
-        facingMode:{ideal:'environment'},
-        width:{ideal:1280},
-        height:{ideal:720}
+        facingMode:{
+          exact:'environment'
+        },
+        width:{
+          ideal:1280,
+          max:1920
+        },
+        height:{
+          ideal:720,
+          max:1080
+        },
+        aspectRatio:{
+          ideal:16/9
+        }
       }
     };
 
-    const controls=await reader.decodeFromConstraints(
-      constraints,
-      videoRef.current,
-      (result,error)=>{
-        if(!result)return;
+    let controls;
 
-        const code=result.getText().trim();
-        if(!code)return;
+    try{
+      controls=await reader.decodeFromConstraints(
+        constraints,
+        videoRef.current,
+        (result,error)=>{
+          if(!result)return;
 
-        try{controls.stop?.()}catch{}
-        try{reader.reset()}catch{}
+          const code=result.getText().trim();
+          if(!code)return;
 
-        scannerRef.current=null;
-        setScanning(false);
-        setBarcode(code);
+          try{controls?.stop?.()}catch{}
+          try{reader.reset()}catch{}
 
-        find(code);
-      }
-    );
+          scannerRef.current=null;
+          setScanning(false);
+          setBarcode(code);
+
+          find(code);
+        }
+      );
+    }catch(firstError){
+      console.warn('Основные настройки камеры не сработали, пробуем запасной режим:',firstError);
+
+      const fallbackConstraints={
+        audio:false,
+        video:{
+          facingMode:'environment'
+        }
+      };
+
+      controls=await reader.decodeFromConstraints(
+        fallbackConstraints,
+        videoRef.current,
+        (result,error)=>{
+          if(!result)return;
+
+          const code=result.getText().trim();
+          if(!code)return;
+
+          try{controls?.stop?.()}catch{}
+          try{reader.reset()}catch{}
+
+          scannerRef.current=null;
+          setScanning(false);
+          setBarcode(code);
+
+          find(code);
+        }
+      );
+    }
 
     scannerRef.current=controls;
 
@@ -355,7 +397,34 @@ function Add({stores,products,user,onClose,onSaved}){
   }
  };
  const save=async()=>{if(!barcode||!name||!expiry)return setMsg('Заполните штрихкод, название и срок.');setBusy(true);let p=products.find(p=>p.barcode===barcode);if(!p){const r=await supabase.from('products').insert({barcode,name,brand}).select().single();if(r.error){setMsg(r.error.message);setBusy(false);return}p=r.data}const r=await supabase.from('expiry_items').insert({product_id:p.id,store_id:store,expiry_date:expiry,quantity:qty,note,created_by:user.id,updated_by:user.id});if(r.error)setMsg(r.error.message);else onSaved();setBusy(false)};
- return <section className="sheet"><div className="sheethead"><h2>Добавить товар</h2><button onClick={onClose}><X/></button></div>{msg&&<div className="msg top-msg">{msg}</div>}<button className="scan" onClick={scan}><Camera/>СКАНИРОВАТЬ ШТРИХКОД</button>{scanning&&<div className="scanner"><video ref={videoRef} autoPlay playsInline muted/><button onClick={()=>{scannerRef.current?.reset();scannerRef.current=null;setScanning(false)}}>ОТМЕНА</button></div>}<input value={barcode} onChange={e=>setBarcode(e.target.value)} onBlur={()=>barcode&&find(barcode)} placeholder="Штрихкод EAN" inputMode="numeric"/><input value={name} onChange={e=>setName(e.target.value)} placeholder="Название товара"/><input value={brand} onChange={e=>setBrand(e.target.value)} placeholder="Бренд (необязательно)"/><label>Срок годности<input type="date" value={expiry} onChange={e=>setExpiry(e.target.value)}/></label><label>Количество<input type="number" min="1" value={qty} onChange={e=>setQty(+e.target.value)}/></label><label>Магазин<select value={store} onChange={e=>setStore(e.target.value)}>{stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Комментарий (необязательно)"/><button className="primary" disabled={busy} onClick={save}>{busy?'СОХРАНЕНИЕ…':'СОХРАНИТЬ'}</button></section>
+ return <section className="sheet"><div className="sheethead"><h2>Добавить товар</h2><button onClick={onClose}><X/></button></div>{msg&&<div className="msg top-msg">{msg}</div>}<button className="scan" onClick={scan}><Camera/>СКАНИРОВАТЬ ШТРИХКОД</button>{scanning&&(
+  <div className="scanner">
+    <div className="scanner-video">
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+      />
+      <div className="scanner-frame"></div>
+    </div>
+
+    <div className="scanner-hint">
+      Наведите камеру на штрихкод
+    </div>
+
+    <button
+      onClick={()=>{
+        try{scannerRef.current?.stop?.()}catch{}
+        try{scannerRef.current?.reset?.()}catch{}
+        scannerRef.current=null;
+        setScanning(false);
+      }}
+    >
+      ОТМЕНА
+    </button>
+  </div>
+)}<input value={barcode} onChange={e=>setBarcode(e.target.value)} onBlur={()=>barcode&&find(barcode)} placeholder="Штрихкод EAN" inputMode="numeric"/><input value={name} onChange={e=>setName(e.target.value)} placeholder="Название товара"/><input value={brand} onChange={e=>setBrand(e.target.value)} placeholder="Бренд (необязательно)"/><label>Срок годности<input type="date" value={expiry} onChange={e=>setExpiry(e.target.value)}/></label><label>Количество<input type="number" min="1" value={qty} onChange={e=>setQty(+e.target.value)}/></label><label>Магазин<select value={store} onChange={e=>setStore(e.target.value)}>{stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Комментарий (необязательно)"/><button className="primary" disabled={busy} onClick={save}>{busy?'СОХРАНЕНИЕ…':'СОХРАНИТЬ'}</button></section>
 }
 function Edit({x,stores,onClose,onSaved}){const [expiry,setExpiry]=useState(x.expiry_date),[qty,setQty]=useState(x.quantity),[store,setStore]=useState(x.store_id),[note,setNote]=useState(x.note||''),[busy,setBusy]=useState(false),[msg,setMsg]=useState('');
  const save=async()=>{setBusy(true);const {data:{user}}=await supabase.auth.getUser();const r=await supabase.from('expiry_items').update({expiry_date:expiry,quantity:qty,store_id:store,note,updated_by:user.id}).eq('id',x.id);if(r.error)setMsg(r.error.message);else onSaved();setBusy(false)};
