@@ -214,219 +214,522 @@ function Stat({n,t,c,on}){return <button className={'stat '+c} onClick={on}><b>{
 function Item({x,onClick}){const s=statusFor(x.expiry_date);return <button className="item" onClick={onClick}><div className={'dot '+s}/><div className="itemmain"><h3>{x.products?.name||'Без названия'}</h3><div className="muted">EAN {x.products?.barcode} · {x.stores?.name}</div><strong>Срок: {fmt(x.expiry_date)}</strong><div className="days">{statusText(x.expiry_date)}</div><div className="muted">Количество: {x.quantity} · Добавил: {x.created?.name||'—'}</div></div></button>}
 function Empty(){return <div className="empty"><PackageCheck size={42}/><b>Ничего не найдено</b><span>Попробуйте изменить фильтр или добавить товар.</span></div>}
 function Add({stores,products,user,onClose,onSaved}){
- const [barcode,setBarcode]=useState(''),[name,setName]=useState(''),[brand,setBrand]=useState(''),[expiry,setExpiry]=useState(localDate()),[qty,setQty]=useState(1),[store,setStore]=useState(user.store_id),[note,setNote]=useState(''),[busy,setBusy]=useState(false),[msg,setMsg]=useState(''),[scanning,setScanning]=useState(false),videoRef=useRef(null),scannerRef=useRef(null);
- useEffect(()=>()=>{scannerRef.current?.stop?.();scannerRef.current?.reset?.();scannerRef.current=null},[]);
+ const [barcode,setBarcode]=useState(''),
+ [name,setName]=useState(''),
+ [brand,setBrand]=useState(''),
+ [expiry,setExpiry]=useState(localDate()),
+ [qty,setQty]=useState(1),
+ [store,setStore]=useState(user.store_id),
+ [note,setNote]=useState(''),
+ [busy,setBusy]=useState(false),
+ [msg,setMsg]=useState(''),
+ [scanning,setScanning]=useState(false),
+ videoRef=useRef(null),
+ scannerRef=useRef(null);
+
+ useEffect(
+  ()=>()=>{scannerRef.current?.stop?.();scannerRef.current?.reset?.();scannerRef.current=null},
+  []
+ );
+
+ const months=[
+  'Январь',
+  'Февраль',
+  'Март',
+  'Апрель',
+  'Май',
+  'Июнь',
+  'Июль',
+  'Август',
+  'Сентябрь',
+  'Октябрь',
+  'Ноябрь',
+  'Декабрь'
+ ];
+
+ const expiryParts=expiry
+  ? expiry.split('-')
+  : localDate().split('-');
+
+ const expiryYear=expiryParts[0]||String(new Date().getFullYear());
+ const expiryMonth=expiryParts[1]||String(new Date().getMonth()+1).padStart(2,'0');
+ const expiryDay=expiryParts[2]||String(new Date().getDate()).padStart(2,'0');
+
+ const daysInMonth=new Date(
+  Number(expiryYear),
+  Number(expiryMonth),
+  0
+ ).getDate();
+
+ const updateExpiry=(day,month,year)=>{
+  let d=Number(day);
+  const maxDay=new Date(
+   Number(year),
+   Number(month),
+   0
+  ).getDate();
+
+  if(d>maxDay)d=maxDay;
+
+  setExpiry(
+   `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+  );
+ };
+
  const scan=async()=>{
   setMsg('');
 
   if(!window.isSecureContext){
-    setMsg('Камера доступна только через HTTPS или localhost.');
-    return;
+   setMsg('Камера доступна только через HTTPS или localhost.');
+   return;
   }
 
   if(!navigator.mediaDevices?.getUserMedia){
-    setMsg('Браузер не предоставляет доступ к камере. Используйте Chrome или Samsung Internet.');
-    return;
+   setMsg('Браузер не предоставляет доступ к камере. Используйте Chrome или Samsung Internet.');
+   return;
   }
 
   try{
-    try{scannerRef.current?.stop?.()}catch{}
-    try{scannerRef.current?.reset?.()}catch{}
-    scannerRef.current=null;
+   try{scannerRef.current?.stop?.()}catch{}
+   try{scannerRef.current?.reset?.()}catch{}
+   scannerRef.current=null;
 
-    const hints=new Map();
+   const hints=new Map();
 
-    hints.set(
-      DecodeHintType.POSSIBLE_FORMATS,
-      [
-        BarcodeFormat.EAN_13,
-        BarcodeFormat.EAN_8,
-        BarcodeFormat.UPC_A,
-        BarcodeFormat.UPC_E
-      ]
+   hints.set(
+    DecodeHintType.POSSIBLE_FORMATS,
+    [
+     BarcodeFormat.EAN_13,
+     BarcodeFormat.EAN_8,
+     BarcodeFormat.UPC_A,
+     BarcodeFormat.UPC_E
+    ]
+   );
+
+   hints.set(DecodeHintType.TRY_HARDER,true);
+
+   const reader=new BrowserMultiFormatReader(hints);
+   scannerRef.current=reader;
+
+   setScanning(true);
+
+   await new Promise(resolve=>{
+    requestAnimationFrame(()=>{
+     requestAnimationFrame(resolve);
+    });
+   });
+
+   if(!videoRef.current){
+    throw new Error('Не удалось подготовить окно камеры.');
+   }
+
+   const constraints={
+    audio:false,
+    video:{
+     facingMode:{
+      exact:'environment'
+     },
+     width:{
+      ideal:1280,
+      max:1920
+     },
+     height:{
+      ideal:720,
+      max:1080
+     },
+     aspectRatio:{
+      ideal:16/9
+     }
+    }
+   };
+
+   let controls;
+
+   try{
+    controls=await reader.decodeFromConstraints(
+     constraints,
+     videoRef.current,
+     (result,error)=>{
+      if(!result)return;
+
+      const code=result.getText().trim();
+      if(!code)return;
+
+      try{controls?.stop?.()}catch{}
+      try{reader.reset()}catch{}
+
+      scannerRef.current=null;
+      setScanning(false);
+      setBarcode(code);
+
+      find(code);
+     }
+    );
+   }catch(firstError){
+    console.warn(
+     'Основные настройки камеры не сработали, пробуем запасной режим:',
+     firstError
     );
 
-    hints.set(DecodeHintType.TRY_HARDER,true);
-
-    const reader=new BrowserMultiFormatReader(hints);
-    scannerRef.current=reader;
-
-    setScanning(true);
-
-    await new Promise(resolve=>{
-      requestAnimationFrame(()=>{
-        requestAnimationFrame(resolve);
-      });
-    });
-
-    if(!videoRef.current){
-      throw new Error('Не удалось подготовить окно камеры.');
-    }
-
-    const constraints={
-      audio:false,
-      video:{
-        facingMode:{
-          exact:'environment'
-        },
-        width:{
-          ideal:1280,
-          max:1920
-        },
-        height:{
-          ideal:720,
-          max:1080
-        },
-        aspectRatio:{
-          ideal:16/9
-        }
-      }
+    const fallbackConstraints={
+     audio:false,
+     video:{
+      facingMode:'environment'
+     }
     };
 
-    let controls;
+    controls=await reader.decodeFromConstraints(
+     fallbackConstraints,
+     videoRef.current,
+     (result,error)=>{
+      if(!result)return;
 
-    try{
-      controls=await reader.decodeFromConstraints(
-        constraints,
-        videoRef.current,
-        (result,error)=>{
-          if(!result)return;
+      const code=result.getText().trim();
+      if(!code)return;
 
-          const code=result.getText().trim();
-          if(!code)return;
+      try{controls?.stop?.()}catch{}
+      try{reader.reset()}catch{}
 
-          try{controls?.stop?.()}catch{}
-          try{reader.reset()}catch{}
+      scannerRef.current=null;
+      setScanning(false);
+      setBarcode(code);
 
-          scannerRef.current=null;
-          setScanning(false);
-          setBarcode(code);
+      find(code);
+     }
+    );
+   }
 
-          find(code);
-        }
-      );
-    }catch(firstError){
-      console.warn('Основные настройки камеры не сработали, пробуем запасной режим:',firstError);
-
-      const fallbackConstraints={
-        audio:false,
-        video:{
-          facingMode:'environment'
-        }
-      };
-
-      controls=await reader.decodeFromConstraints(
-        fallbackConstraints,
-        videoRef.current,
-        (result,error)=>{
-          if(!result)return;
-
-          const code=result.getText().trim();
-          if(!code)return;
-
-          try{controls?.stop?.()}catch{}
-          try{reader.reset()}catch{}
-
-          scannerRef.current=null;
-          setScanning(false);
-          setBarcode(code);
-
-          find(code);
-        }
-      );
-    }
-
-    scannerRef.current=controls;
+   scannerRef.current=controls;
 
   }catch(e){
-    console.error('Scanner error:',e);
+   console.error('Scanner error:',e);
 
-    try{scannerRef.current?.stop?.()}catch{}
-    try{scannerRef.current?.reset?.()}catch{}
+   try{scannerRef.current?.stop?.()}catch{}
+   try{scannerRef.current?.reset?.()}catch{}
 
-    scannerRef.current=null;
-    setScanning(false);
+   scannerRef.current=null;
+   setScanning(false);
 
-    const m=e?.message||'';
+   const m=e?.message||'';
 
-    if(
-      m.toLowerCase().includes('permission') ||
-      m.toLowerCase().includes('notallowed') ||
-      m.toLowerCase().includes('denied')
-    ){
-      setMsg('Нет доступа к камере. Разрешите камеру для этого сайта в настройках браузера.');
-    }else{
-      setMsg('Не удалось запустить камеру: '+m);
-    }
-  }
-};
- const find = async (rawCode) => {
-  const code = String(rawCode || '').replace(/\D/g, '');
-  setBarcode(code);
-  setMsg('Ищем товар…');
-  const own = products.find(p => String(p.barcode || '').replace(/\D/g, '') === code);
-  if (own) {
-    setName(own.name || '');
-    setBrand(own.brand || '');
-    setMsg('Товар найден в нашей базе');
-    return;
-  }
-  setBusy(true);
-  try {
-    const r = await fetch(`https://world.openfoodfacts.org/api/v3/product/${encodeURIComponent(code)}?fields=code,product_name,brands`,{headers:{Accept:'application/json'}});
-    const j = await r.json();
-    const product = j?.product;
-    const productName = product?.product_name || '';
-    const brand = product?.brands || '';
-    if (productName.trim()) {
-      setName(productName.trim());
-      setBrand(brand.trim());
-      setMsg('Товар найден в Open Food Facts');
-    } else {
-      setName('');
-      setBrand('');
-      setMsg('Товар не найден — введите название вручную');
-    }
-  } catch (error) {
-    console.error('Open Food Facts error:', error);
-    setName('');
-    setBrand('');
-    setMsg('Не удалось выполнить поиск — введите название вручную');
-  } finally {
-    setBusy(false);
+   if(
+    m.toLowerCase().includes('permission') ||
+    m.toLowerCase().includes('notallowed') ||
+    m.toLowerCase().includes('denied')
+   ){
+    setMsg('Нет доступа к камере. Разрешите камеру для этого сайта в настройках браузера.');
+   }else{
+    setMsg('Не удалось запустить камеру: '+m);
+   }
   }
  };
- const save=async()=>{if(!barcode||!name||!expiry)return setMsg('Заполните штрихкод, название и срок.');setBusy(true);let p=products.find(p=>p.barcode===barcode);if(!p){const r=await supabase.from('products').insert({barcode,name,brand}).select().single();if(r.error){setMsg(r.error.message);setBusy(false);return}p=r.data}const r=await supabase.from('expiry_items').insert({product_id:p.id,store_id:store,expiry_date:expiry,quantity:qty,note,created_by:user.id,updated_by:user.id});if(r.error)setMsg(r.error.message);else onSaved();setBusy(false)};
- return <section className="sheet"><div className="sheethead"><h2>Добавить товар</h2><button onClick={onClose}><X/></button></div>{msg&&<div className="msg top-msg">{msg}</div>}<button className="scan" onClick={scan}><Camera/>СКАНИРОВАТЬ ШТРИХКОД</button>{scanning&&(
-  <div className="scanner">
-    <div className="scanner-video">
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        muted
-      />
-      <div className="scanner-frame"></div>
-    </div>
 
-    <div className="scanner-hint">
-      Наведите камеру на штрихкод
-    </div>
+ const find=async(rawCode)=>{
+  const code=String(rawCode||'').replace(/\D/g,'');
+  setBarcode(code);
+  setMsg('Ищем товар…');
 
-    <button
-      onClick={()=>{
-        try{scannerRef.current?.stop?.()}catch{}
-        try{scannerRef.current?.reset?.()}catch{}
-        scannerRef.current=null;
-        setScanning(false);
-      }}
-    >
-      ОТМЕНА
+  const own=products.find(
+   p=>String(p.barcode||'').replace(/\D/g,'')===code
+  );
+
+  if(own){
+   setName(own.name||'');
+   setBrand(own.brand||'');
+   setMsg('Товар найден в нашей базе');
+   return;
+  }
+
+  setBusy(true);
+
+  try{
+   const r=await fetch(
+    `https://world.openfoodfacts.org/api/v3/product/${encodeURIComponent(code)}?fields=code,product_name,brands`,
+    {
+     headers:{
+      Accept:'application/json'
+     }
+    }
+   );
+
+   const j=await r.json();
+   const product=j?.product;
+   const productName=product?.product_name||'';
+   const brand=product?.brands||'';
+
+   if(productName.trim()){
+    setName(productName.trim());
+    setBrand(brand.trim());
+    setMsg('Товар найден в Open Food Facts');
+   }else{
+    setName('');
+    setBrand('');
+    setMsg('Товар не найден — введите название вручную');
+   }
+
+  }catch(error){
+   console.error('Open Food Facts error:',error);
+   setName('');
+   setBrand('');
+   setMsg('Не удалось выполнить поиск — введите название вручную');
+  }finally{
+   setBusy(false);
+  }
+ };
+
+ const save=async()=>{
+  if(!barcode||!name||!expiry){
+   return setMsg('Заполните штрихкод, название и срок.');
+  }
+
+  setBusy(true);
+
+  let p=products.find(p=>p.barcode===barcode);
+
+  if(!p){
+   const r=await supabase
+    .from('products')
+    .insert({
+     barcode,
+     name,
+     brand
+    })
+    .select()
+    .single();
+
+   if(r.error){
+    setMsg(r.error.message);
+    setBusy(false);
+    return;
+   }
+
+   p=r.data;
+  }
+
+  const r=await supabase
+   .from('expiry_items')
+   .insert({
+    product_id:p.id,
+    store_id:store,
+    expiry_date:expiry,
+    quantity:qty,
+    note,
+    created_by:user.id,
+    updated_by:user.id
+   });
+
+  if(r.error){
+   setMsg(r.error.message);
+  }else{
+   onSaved();
+  }
+
+  setBusy(false);
+ };
+
+ return (
+  <section className="sheet">
+
+   <div className="sheethead">
+    <h2>Добавить товар</h2>
+    <button onClick={onClose}>
+     <X/>
     </button>
-  </div>
-)}<input value={barcode} onChange={e=>setBarcode(e.target.value)} onBlur={()=>barcode&&find(barcode)} placeholder="Штрихкод EAN" inputMode="numeric"/><input value={name} onChange={e=>setName(e.target.value)} placeholder="Название товара"/><input value={brand} onChange={e=>setBrand(e.target.value)} placeholder="Бренд (необязательно)"/><label>Срок годности<input type="date" value={expiry} onChange={e=>setExpiry(e.target.value)}/></label><label>Количество<input type="number" min="1" value={qty} onChange={e=>setQty(+e.target.value)}/></label><label>Магазин<select value={store} onChange={e=>setStore(e.target.value)}>{stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Комментарий (необязательно)"/><button className="primary" disabled={busy} onClick={save}>{busy?'СОХРАНЕНИЕ…':'СОХРАНИТЬ'}</button></section>
-}
-function Edit({x,stores,onClose,onSaved}){const [expiry,setExpiry]=useState(x.expiry_date),[qty,setQty]=useState(x.quantity),[store,setStore]=useState(x.store_id),[note,setNote]=useState(x.note||''),[busy,setBusy]=useState(false),[msg,setMsg]=useState('');
+   </div>
+
+   {msg&&(
+    <div className="msg top-msg">
+     {msg}
+    </div>
+   )}
+
+   <button
+    className="scan"
+    onClick={scan}
+   >
+    <Camera/>
+    СКАНИРОВАТЬ ШТРИХКОД
+   </button>
+
+   {scanning&&(
+    <div className="scanner">
+
+     <div className="scanner-video">
+      <video
+       ref={videoRef}
+       autoPlay
+       playsInline
+       muted
+      />
+
+      <div className="scanner-frame"></div>
+     </div>
+
+     <div className="scanner-hint">
+      Наведите камеру на штрихкод
+     </div>
+
+     <button
+      onClick={()=>{
+       const controls=scannerRef.current;
+
+       try{
+        controls?.stop?.();
+       }catch{}
+
+       try{
+        controls?.reset?.();
+       }catch{}
+
+       scannerRef.current=null;
+       setScanning(false);
+      }}
+     >
+      ОТМЕНА
+     </button>
+
+    </div>
+   )}
+
+   <input
+    value={barcode}
+    onChange={e=>setBarcode(e.target.value)}
+    onBlur={()=>barcode&&find(barcode)}
+    placeholder="Штрихкод EAN"
+    inputMode="numeric"
+   />
+
+   <input
+    value={name}
+    onChange={e=>setName(e.target.value)}
+    placeholder="Название товара"
+   />
+
+   <input
+    value={brand}
+    onChange={e=>setBrand(e.target.value)}
+    placeholder="Бренд (необязательно)"
+   />
+
+   <label>
+    Срок годности
+
+    <div
+     style={{
+      display:'grid',
+      gridTemplateColumns:'1fr 1.5fr 1fr',
+      gap:8,
+      marginTop:6
+     }}
+    >
+
+     <select
+      value={expiryDay}
+      onChange={e=>updateExpiry(
+       e.target.value,
+       expiryMonth,
+       expiryYear
+      )}
+     >
+      {Array.from(
+       {length:daysInMonth},
+       (_,i)=>i+1
+      ).map(day=>(
+       <option
+        key={day}
+        value={String(day).padStart(2,'0')}
+       >
+        {String(day).padStart(2,'0')}
+       </option>
+      ))}
+     </select>
+
+     <select
+      value={expiryMonth}
+      onChange={e=>updateExpiry(
+       expiryDay,
+       e.target.value,
+       expiryYear
+      )}
+     >
+      {months.map((month,index)=>(
+       <option
+        key={index+1}
+        value={String(index+1).padStart(2,'0')}
+       >
+        {month}
+       </option>
+      ))}
+     </select>
+
+     <select
+      value={expiryYear}
+      onChange={e=>updateExpiry(
+       expiryDay,
+       expiryMonth,
+       e.target.value
+      )}
+     >
+      {Array.from(
+       {length:6},
+       (_,i)=>new Date().getFullYear()+i
+      ).map(year=>(
+       <option
+        key={year}
+        value={year}
+       >
+        {year}
+       </option>
+      ))}
+     </select>
+
+    </div>
+   </label>
+
+   <label>
+    Количество
+    <input
+     type="number"
+     min="1"
+     value={qty}
+     onChange={e=>setQty(+e.target.value)}
+    />
+   </label>
+
+   <label>
+    Магазин
+    <select
+     value={store}
+     onChange={e=>setStore(e.target.value)}
+    >
+     {stores.map(s=>(
+      <option
+       key={s.id}
+       value={s.id}
+      >
+       {s.name}
+      </option>
+     ))}
+    </select>
+   </label>
+
+   <textarea
+    value={note}
+    onChange={e=>setNote(e.target.value)}
+    placeholder="Комментарий (необязательно)"
+   />
+
+   <button
+    className="primary"
+    disabled={busy}
+    onClick={save}
+   >
+    {busy?'СОХРАНЕНИЕ…':'СОХРАНИТЬ'}
+   </button>
+
+  </section>
+ );
+}function Edit({x,stores,onClose,onSaved}){const [expiry,setExpiry]=useState(x.expiry_date),[qty,setQty]=useState(x.quantity),[store,setStore]=useState(x.store_id),[note,setNote]=useState(x.note||''),[busy,setBusy]=useState(false),[msg,setMsg]=useState('');
  const save=async()=>{setBusy(true);const {data:{user}}=await supabase.auth.getUser();const r=await supabase.from('expiry_items').update({expiry_date:expiry,quantity:qty,store_id:store,note,updated_by:user.id}).eq('id',x.id);if(r.error)setMsg(r.error.message);else onSaved();setBusy(false)};
  const dispose=async()=>{setBusy(true);setMsg('');const {data:{user}}=await supabase.auth.getUser();const {error}=await supabase.from('expiry_items').update({is_disposed:true,updated_by:user.id,updated_at:new Date().toISOString()}).eq('id',x.id).eq('is_disposed',false);if(error){setMsg(error.message);setBusy(false);return}onSaved();};
  return <div className="modal"><div className="dialog"><div className="sheethead"><h2>{x.products?.name}</h2><button onClick={onClose}><X/></button></div><div className="muted">EAN {x.products?.barcode}</div><label>Срок<input type="date" value={expiry} onChange={e=>setExpiry(e.target.value)}/></label><label>Количество<input type="number" min="1" value={qty} onChange={e=>setQty(+e.target.value)}/></label><label>Магазин<select value={store} onChange={e=>setStore(e.target.value)}>{stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Комментарий"/><button className="primary" disabled={busy} onClick={save}>{busy?'СОХРАНЕНИЕ…':'СОХРАНИТЬ ИЗМЕНЕНИЯ'}</button><button className="danger" disabled={busy} onClick={dispose}><Trash2/>СПИСАТЬ</button>{msg&&<p className="msg">{msg}</p>}</div></div>}
