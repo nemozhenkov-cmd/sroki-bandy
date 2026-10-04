@@ -74,5 +74,9 @@
 
 .store-admin-row button{
   flex-shrink:0;
-  font-size:12px;
+  font-size:11px;
+  max-width:150px;
+  white-space:normal;
+  text-align:center;
+  padding:8px 10px;
 }

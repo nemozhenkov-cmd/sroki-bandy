@@ -167,14 +167,14 @@ function Auth(){
 
   return (
     <div className="auth">
-      <div className="logo">С</div>
+      <div className="logo">Ч</div>
 
       <h1>Банда Видова</h1>
       <p>Контроль сроков годности</p>
 
       {reg&&
         <input
-          placeholder="Имя"
+          placeholder="Фамилия и Имя"
           value={name}
           onChange={e=>setName(e.target.value)}
         />
