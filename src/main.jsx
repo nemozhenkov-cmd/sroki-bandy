@@ -132,7 +132,7 @@ const visibleStores=user?.role==='admin'
 function Splash(){
   return (
     <div className="splash">
-      <div className="logo">С</div>
+      <div className="logo">Ч</div>
       <h1>Банда Видова</h1>
       <p>Контроль сроков годности</p>
       <small>Автор: Неможенко В. 2787320</small>
