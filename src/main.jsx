@@ -980,19 +980,26 @@ function HistoryView(){
  const [rows,setRows]=useState([]),[loading,setLoading]=useState(true),[msg,setMsg]=useState('');
  useEffect(()=>{(async()=>{const {data,error}=await supabase.from('history').select('*,users(name),expiry_items(products(name),stores(name))').order('created_at',{ascending:false}).limit(100);if(error)setMsg(error.message);else setRows(data||[]);setLoading(false)})()},[]);
  return <section className="page"><h2>История</h2>{loading?<div className="empty"><RefreshCw/><span>Загрузка…</span></div>:msg?<div className="empty"><AlertTriangle/><span>{msg}</span></div>:rows.length?<div className="history-list">{rows.map(r=><div className="history-row" key={r.id}><b>{new Date(r.created_at).toLocaleString('ru-RU')}</b><span>{r.users?.name||'Сотрудник'} · {r.action==='added'?'добавил товар':r.action==='disposed'?'списал товар':'изменил товар'}</span><small>{r.expiry_items?.products?.name||'Товар'} · {r.expiry_items?.stores?.name||'—'}</small></div>)}</div>:<div className="empty"><History size={42}/><b>История пока пуста</b><span>Изменения появятся здесь автоматически.</span></div>}</section>}
+```jsx
 function EmployeeManagement({user,stores,onChanged}){
   const [employees,setEmployees]=useState([]);
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(null);
   const [msg,setMsg]=useState('');
 
+  const [roleFilter,setRoleFilter]=useState('all');
+  const [newFilter,setNewFilter]=useState(false);
+
+  const [editingName,setEditingName]=useState(null);
+  const [nameDraft,setNameDraft]=useState('');
+
   const loadEmployees=async()=>{
     setLoading(true);
 
     const {data,error}=await supabase
-  .from('users')
-  .select('id,name,role,store_id')
-  .order('name');
+      .from('users')
+      .select('id,name,role,store_id,created_at')
+      .order('name');
 
     if(error){
       setMsg(error.message);
@@ -1027,27 +1034,230 @@ function EmployeeManagement({user,stores,onChanged}){
     setBusy(null);
   };
 
+  const saveName=async(employee)=>{
+    const newName=nameDraft.trim();
+
+    if(!newName){
+      setMsg('Имя пользователя не может быть пустым.');
+      return;
+    }
+
+    setBusy(employee.id);
+    setMsg('');
+
+    const {error}=await supabase
+      .from('users')
+      .update({
+        name:newName
+      })
+      .eq('id',employee.id);
+
+    if(error){
+      setMsg(error.message);
+    }else{
+      setEditingName(null);
+      setNameDraft('');
+      await loadEmployees();
+      onChanged?.();
+    }
+
+    setBusy(null);
+  };
+
+  const isNewUser=(employee)=>{
+    if(!employee.created_at)return false;
+
+    const created=new Date(employee.created_at).getTime();
+    const now=Date.now();
+
+    return now-created<=3*24*60*60*1000;
+  };
+
+  const filteredEmployees=employees.filter(employee=>{
+    if(roleFilter!=='all' && employee.role!==roleFilter){
+      return false;
+    }
+
+    if(newFilter && !isNewUser(employee)){
+      return false;
+    }
+
+    return true;
+  });
+
   if(user.role!=='admin')return null;
 
   return (
     <div style={{marginTop:24}}>
+
       <h3>Сотрудники</h3>
+
+      <div
+        style={{
+          display:'grid',
+          gap:8,
+          marginBottom:16
+        }}
+      >
+
+        <select
+          value={roleFilter}
+          onChange={e=>setRoleFilter(e.target.value)}
+        >
+          <option value="all">
+            Все роли
+          </option>
+
+          <option value="srtz_rtz">
+            СРТЗ / РТЗ
+          </option>
+
+          <option value="manager">
+            Управляющие
+          </option>
+
+          <option value="tm">
+            Территориальные менеджеры
+          </option>
+
+          <option value="admin">
+            Администратор
+          </option>
+        </select>
+
+        <button
+          type="button"
+          className={newFilter?'primary':'secondary'}
+          onClick={()=>setNewFilter(v=>!v)}
+        >
+          {newFilter
+            ?'✓ НОВЫЕ ЗА ПОСЛЕДНИЕ 3 ДНЯ'
+            :'НОВЫЕ ЗА ПОСЛЕДНИЕ 3 ДНЯ'
+          }
+        </button>
+
+      </div>
 
       {loading ? (
         <div className="empty">
           <RefreshCw/>
           <span>Загрузка…</span>
         </div>
-      ) : employees.length ? (
+
+      ) : filteredEmployees.length ? (
+
         <div className="store-admin-list">
-          {employees.map(employee=>(
+
+          {filteredEmployees.map(employee=>(
             <div
               key={employee.id}
               className="store-admin-row"
               style={{display:'block'}}
             >
+
               <div>
-                <b>{employee.name||'Без имени'}</b>
+
+                {editingName===employee.id ? (
+
+                  <div
+                    style={{
+                      display:'grid',
+                      gap:8
+                    }}
+                  >
+
+                    <input
+                      value={nameDraft}
+                      onChange={e=>setNameDraft(e.target.value)}
+                      placeholder="Фамилия Имя"
+                      disabled={busy===employee.id}
+                      autoFocus
+                    />
+
+                    <div
+                      style={{
+                        display:'flex',
+                        gap:8
+                      }}
+                    >
+
+                      <button
+                        className="primary"
+                        disabled={busy===employee.id}
+                        onClick={()=>saveName(employee)}
+                      >
+                        {busy===employee.id
+                          ?'СОХРАНЕНИЕ…'
+                          :'СОХРАНИТЬ ИМЯ'
+                        }
+                      </button>
+
+                      <button
+                        className="secondary"
+                        disabled={busy===employee.id}
+                        onClick={()=>{
+                          setEditingName(null);
+                          setNameDraft('');
+                        }}
+                      >
+                        ОТМЕНА
+                      </button>
+
+                    </div>
+
+                  </div>
+
+                ) : (
+
+                  <div
+                    style={{
+                      display:'flex',
+                      alignItems:'center',
+                      justifyContent:'space-between',
+                      gap:10
+                    }}
+                  >
+
+                    <div>
+                      <b>
+                        {employee.name||'Без имени'}
+                      </b>
+
+                      {isNewUser(employee)&&(
+                        <span
+                          style={{
+                            marginLeft:8,
+                            color:'#e53935',
+                            fontSize:12,
+                            fontWeight:700
+                          }}
+                        >
+                          НОВЫЙ
+                        </span>
+                      )}
+                    </div>
+
+                    <button
+                      className="secondary"
+                      style={{
+                        width:'auto',
+                        flexShrink:0,
+                        padding:'6px 9px',
+                        fontSize:11
+                      }}
+                      disabled={busy===employee.id}
+                      onClick={()=>{
+                        setEditingName(employee.id);
+                        setNameDraft(employee.name||'');
+                        setMsg('');
+                      }}
+                    >
+                      ИЗМЕНИТЬ
+                    </button>
+
+                  </div>
+
+                )}
 
                 <div className="muted">
                   {employee.role==='admin'
@@ -1059,18 +1269,32 @@ function EmployeeManagement({user,stores,onChanged}){
                         :'СРТЗ / РТЗ'
                   }
 
-                  {employee.store_id &&
-                    ` · ${stores.find(s=>s.id===employee.store_id)?.name||employee.store_id}`
-                  }
+                  {employee.store_id && (
+  <>
+    {' · '}
+    {stores.find(s=>s.id===employee.store_id)?.name || employee.store_id}
+  </>
+)}
                 </div>
+
+                {employee.created_at&&(
+                  <small className="muted">
+                    Регистрация: {new Date(employee.created_at).toLocaleDateString('ru-RU')}
+                  </small>
+                )}
+
               </div>
 
-              {employee.role!=='admin' && (
-                <div style={{
-                  display:'grid',
-                  gap:8,
-                  marginTop:12
-                }}>
+              {employee.role!=='admin' && editingName!==employee.id && (
+
+                <div
+                  style={{
+                    display:'grid',
+                    gap:8,
+                    marginTop:12
+                  }}
+                >
+
                   <select
                     value={employee.role}
                     disabled={busy===employee.id}
@@ -1078,22 +1302,38 @@ function EmployeeManagement({user,stores,onChanged}){
                       const newRole=e.target.value;
 
                       if(newRole==='tm'){
-                        changeUser(employee,'tm',null);
+                        changeUser(
+                          employee,
+                          'tm',
+                          null
+                        );
                       }else{
                         changeUser(
                           employee,
                           newRole,
-                          employee.store_id||stores.find(s=>s.is_active)?.id
+                          employee.store_id
+                            ||stores.find(s=>s.is_active)?.id
                         );
                       }
                     }}
                   >
-                    <option value="srtz_rtz">СРТЗ / РТЗ</option>
-                    <option value="manager">Управляющий магазина</option>
-                    <option value="tm">Территориальный менеджер</option>
+
+                    <option value="srtz_rtz">
+                      СРТЗ / РТЗ
+                    </option>
+
+                    <option value="manager">
+                      Управляющий магазина
+                    </option>
+
+                    <option value="tm">
+                      Территориальный менеджер
+                    </option>
+
                   </select>
 
                   {employee.role!=='tm' && (
+
                     <select
                       value={employee.store_id||''}
                       disabled={busy===employee.id}
@@ -1105,7 +1345,10 @@ function EmployeeManagement({user,stores,onChanged}){
                         );
                       }}
                     >
-                      <option value="">Выберите магазин</option>
+
+                      <option value="">
+                        Выберите магазин
+                      </option>
 
                       {stores
                         .filter(s=>s.is_active)
@@ -1117,29 +1360,52 @@ function EmployeeManagement({user,stores,onChanged}){
                             {store.name}
                           </option>
                         ))
-}
+                      }
+
                     </select>
+
                   )}
 
-                  {busy===employee.id && (
-                    <small>Сохранение…</small>
+                  {busy===employee.id&&(
+                    <small>
+                      Сохранение…
+                    </small>
                   )}
+
                 </div>
+
               )}
+
             </div>
           ))}
+
         </div>
+
       ) : (
+
         <div className="empty">
           <UserRound/>
-          <b>Сотрудников пока нет</b>
+          <b>
+            {newFilter
+              ?'Новых пользователей за последние 3 дня нет'
+              :'По выбранному фильтру сотрудников нет'
+            }
+          </b>
         </div>
+
       )}
 
-      {msg&&<p className="msg">{msg}</p>}
+      {msg&&(
+        <p className="msg">
+          {msg}
+        </p>
+      )}
+
     </div>
   );
 }
+```
+
 
 function Profile({user,session,stores,onStoresChanged,onLogout}){
   const [busy,setBusy]=useState(null);
