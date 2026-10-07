@@ -1452,13 +1452,29 @@ const addStore=async()=>{
     setBusy('add-store');
     setMsg('');
 
-    const {error}=await supabase
-      .from('stores')
-      .insert({
-        name,
-        address,
-        is_active:true
-      });
+    const {data:lastStore,error:lastStoreError}=await supabase
+  .from('stores')
+  .select('id')
+  .order('id',{ascending:false})
+  .limit(1)
+  .maybeSingle();
+
+if(lastStoreError){
+  setMsg(lastStoreError.message);
+  setBusy(null);
+  return;
+}
+
+const newId=(lastStore?.id||0)+1;
+
+const {error}=await supabase
+  .from('stores')
+  .insert({
+    id:newId,
+    name,
+    address,
+    is_active:true
+  });
 
     if(error){
       setMsg(error.message);
