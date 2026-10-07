@@ -280,149 +280,279 @@ function Add({stores,products,user,onClose,onSaved}){
   setMsg('');
 
   if(!window.isSecureContext){
-   setMsg('Камера доступна только через HTTPS или localhost.');
-   return;
+    setMsg('Камера доступна только через HTTPS или localhost.');
+    return;
   }
 
   if(!navigator.mediaDevices?.getUserMedia){
-   setMsg('Браузер не предоставляет доступ к камере. Используйте Chrome или Samsung Internet.');
-   return;
+    setMsg('Браузер не предоставляет доступ к камере. Используйте Chrome или Samsung Internet.');
+    return;
   }
 
   try{
-   try{scannerRef.current?.stop?.()}catch{}
-   try{scannerRef.current?.reset?.()}catch{}
-   scannerRef.current=null;
+    try{scannerRef.current?.stop?.()}catch{}
+    try{scannerRef.current?.reset?.()}catch{}
+    scannerRef.current=null;
 
-   const hints=new Map();
+    const hints=new Map();
 
-   hints.set(
-    DecodeHintType.POSSIBLE_FORMATS,
-    [
-     BarcodeFormat.EAN_13,
-     BarcodeFormat.EAN_8,
-     BarcodeFormat.UPC_A,
-     BarcodeFormat.UPC_E
-    ]
-   );
+    hints.set(
+      DecodeHintType.POSSIBLE_FORMATS,
+      [
+        BarcodeFormat.EAN_13,
+        BarcodeFormat.EAN_8,
+        BarcodeFormat.UPC_A,
+        BarcodeFormat.UPC_E
+      ]
+    );
 
-   hints.set(DecodeHintType.TRY_HARDER,true);
+    hints.set(DecodeHintType.TRY_HARDER,true);
 
-   const reader=new BrowserMultiFormatReader(hints);
-   scannerRef.current=reader;
+    const reader=new BrowserMultiFormatReader(hints);
+    scannerRef.current=reader;
 
-   setScanning(true);
+    setScanning(true);
 
-   await new Promise(resolve=>{
-    requestAnimationFrame(()=>{
-     requestAnimationFrame(resolve);
+    await new Promise(resolve=>{
+      requestAnimationFrame(()=>{
+        requestAnimationFrame(resolve);
+      });
     });
-   });
 
-   if(!videoRef.current){
-    throw new Error('Не удалось подготовить окно камеры.');
-   }
-
-   const constraints={
-    audio:false,
-    video:{
-     facingMode:{
-      exact:'environment'
-     },
-     width:{
-      ideal:1280,
-      max:1920
-     },
-     height:{
-      ideal:720,
-      max:1080
-     },
-     aspectRatio:{
-      ideal:16/9
-     }
+    if(!videoRef.current){
+      throw new Error('Не удалось подготовить окно камеры.');
     }
-   };
 
-   let controls;
+    /*
+     * Сначала получаем разрешение на камеру.
+     * После этого браузер обычно начинает показывать
+     * реальные deviceId и названия камер.
+     */
+    let permissionStream=null;
 
-   try{
-    controls=await reader.decodeFromConstraints(
-     constraints,
-     videoRef.current,
-     (result,error)=>{
-      if(!result)return;
+    try{
+      permissionStream=await navigator.mediaDevices.getUserMedia({
+        audio:false,
+        video:{
+          facingMode:'environment'
+        }
+      });
+    }catch(permissionError){
+      console.warn('Не удалось получить разрешение на камеру:',permissionError);
+    }
 
-      const code=result.getText().trim();
-      if(!code)return;
+    if(permissionStream){
+      permissionStream.getTracks().forEach(track=>track.stop());
+    }
 
-      try{controls?.stop?.()}catch{}
-      try{reader.reset()}catch{}
+    const devices=await navigator.mediaDevices.enumerateDevices();
 
-      scannerRef.current=null;
-      setScanning(false);
-      setBarcode(code);
-
-      find(code);
-     }
+    const cameras=devices.filter(
+      device=>device.kind==='videoinput'
     );
-   }catch(firstError){
-    console.warn(
-     'Основные настройки камеры не сработали, пробуем запасной режим:',
-     firstError
+
+    console.log('Доступные камеры:',cameras);
+
+    /*
+     * Ищем заднюю камеру.
+     *
+     * Некоторые Android/браузеры передают в label:
+     * "back", "rear", "environment", "facing back"
+     *
+     * Ультраширокая камера часто содержит:
+     * "wide", "ultra", "0.5", "ultrawide"
+     *
+     * Поэтому такие камеры понижаем в приоритете.
+     */
+    const rearCameras=cameras.filter(camera=>{
+      const label=(camera.label||'').toLowerCase();
+
+      const isRear=
+        label.includes('back') ||
+        label.includes('rear') ||
+        label.includes('environment') ||
+        label.includes('facing');
+
+      const isWide=
+        label.includes('wide') ||
+        label.includes('ultra') ||
+        label.includes('0.5');
+
+      return isRear&&!isWide;
+    });
+
+    /*
+     * Если браузер дал нормальные названия —
+     * берём первую подходящую заднюю камеру.
+     *
+     * Если названий нет — используем первую камеру,
+     * которую браузер считает задней через facingMode.
+     */
+    const selectedCamera=
+      rearCameras[0] ||
+      cameras.find(camera=>{
+        const label=(camera.label||'').toLowerCase();
+
+        return(
+          label.includes('back') ||
+          label.includes('rear') ||
+          label.includes('environment')
+        );
+      });
+
+    console.log(
+      'Выбранная камера:',
+      selectedCamera?.label,
+      selectedCamera?.deviceId
     );
 
-    const fallbackConstraints={
-     audio:false,
-     video:{
-      facingMode:'environment'
-     }
-    };
+    let controls;
 
-    controls=await reader.decodeFromConstraints(
-     fallbackConstraints,
-     videoRef.current,
-     (result,error)=>{
-      if(!result)return;
+    /*
+     * Если удалось получить конкретную камеру,
+     * используем deviceId.
+     */
+    if(selectedCamera?.deviceId){
 
-      const code=result.getText().trim();
-      if(!code)return;
+      const constraints={
+        audio:false,
+        video:{
+          deviceId:{
+            exact:selectedCamera.deviceId
+          },
+          width:{
+            ideal:1280,
+            max:1920
+          },
+          height:{
+            ideal:720,
+            max:1080
+          },
+          aspectRatio:{
+            ideal:16/9
+          }
+        }
+      };
 
-      try{controls?.stop?.()}catch{}
-      try{reader.reset()}catch{}
+      try{
 
-      scannerRef.current=null;
-      setScanning(false);
-      setBarcode(code);
+        controls=await reader.decodeFromConstraints(
+          constraints,
+          videoRef.current,
+          (result,error)=>{
+            if(!result)return;
 
-      find(code);
-     }
-    );
-   }
+            const code=result.getText().trim();
+            if(!code)return;
 
-   scannerRef.current=controls;
+            try{controls?.stop?.()}catch{}
+            try{reader.reset()}catch{}
+
+            scannerRef.current=null;
+            setScanning(false);
+            setBarcode(code);
+
+            find(code);
+          }
+        );
+
+      }catch(cameraError){
+
+        console.warn(
+          'Не удалось запустить выбранную камеру:',
+          cameraError
+        );
+
+        /*
+         * Запасной вариант:
+         * просим любую заднюю камеру.
+         */
+        controls=await reader.decodeFromConstraints(
+          {
+            audio:false,
+            video:{
+              facingMode:'environment'
+            }
+          },
+          videoRef.current,
+          (result,error)=>{
+            if(!result)return;
+
+            const code=result.getText().trim();
+            if(!code)return;
+
+            try{controls?.stop?.()}catch{}
+            try{reader.reset()}catch{}
+
+            scannerRef.current=null;
+            setScanning(false);
+            setBarcode(code);
+
+            find(code);
+          }
+        );
+      }
+
+    }else{
+
+      /*
+       * Если браузер не дал список камер,
+       * оставляем совместимый fallback.
+       */
+      controls=await reader.decodeFromConstraints(
+        {
+          audio:false,
+          video:{
+            facingMode:'environment',
+            width:{ideal:1280},
+            height:{ideal:720}
+          }
+        },
+        videoRef.current,
+        (result,error)=>{
+          if(!result)return;
+
+          const code=result.getText().trim();
+          if(!code)return;
+
+          try{controls?.stop?.()}catch{}
+          try{reader.reset()}catch{}
+
+          scannerRef.current=null;
+          setScanning(false);
+          setBarcode(code);
+
+          find(code);
+        }
+      );
+    }
+
+    scannerRef.current=controls;
 
   }catch(e){
-   console.error('Scanner error:',e);
+    console.error('Scanner error:',e);
 
-   try{scannerRef.current?.stop?.()}catch{}
-   try{scannerRef.current?.reset?.()}catch{}
+    try{scannerRef.current?.stop?.()}catch{}
+    try{scannerRef.current?.reset?.()}catch{}
 
-   scannerRef.current=null;
-   setScanning(false);
+    scannerRef.current=null;
+    setScanning(false);
 
-   const m=e?.message||'';
+    const m=e?.message||'';
 
-   if(
-    m.toLowerCase().includes('permission') ||
-    m.toLowerCase().includes('notallowed') ||
-    m.toLowerCase().includes('denied')
-   ){
-    setMsg('Нет доступа к камере. Разрешите камеру для этого сайта в настройках браузера.');
-   }else{
-    setMsg('Не удалось запустить камеру: '+m);
-   }
+    if(
+      m.toLowerCase().includes('permission') ||
+      m.toLowerCase().includes('notallowed') ||
+      m.toLowerCase().includes('denied')
+    ){
+      setMsg(
+        'Нет доступа к камере. Разрешите камеру для этого сайта в настройках браузера.'
+      );
+    }else{
+      setMsg('Не удалось запустить камеру: '+m);
+    }
   }
- };
+};
 
  const find=async(rawCode)=>{
   const code=String(rawCode||'').replace(/\D/g,'');
