@@ -980,7 +980,6 @@ function HistoryView(){
  const [rows,setRows]=useState([]),[loading,setLoading]=useState(true),[msg,setMsg]=useState('');
  useEffect(()=>{(async()=>{const {data,error}=await supabase.from('history').select('*,users(name),expiry_items(products(name),stores(name))').order('created_at',{ascending:false}).limit(100);if(error)setMsg(error.message);else setRows(data||[]);setLoading(false)})()},[]);
  return <section className="page"><h2>История</h2>{loading?<div className="empty"><RefreshCw/><span>Загрузка…</span></div>:msg?<div className="empty"><AlertTriangle/><span>{msg}</span></div>:rows.length?<div className="history-list">{rows.map(r=><div className="history-row" key={r.id}><b>{new Date(r.created_at).toLocaleString('ru-RU')}</b><span>{r.users?.name||'Сотрудник'} · {r.action==='added'?'добавил товар':r.action==='disposed'?'списал товар':'изменил товар'}</span><small>{r.expiry_items?.products?.name||'Товар'} · {r.expiry_items?.stores?.name||'—'}</small></div>)}</div>:<div className="empty"><History size={42}/><b>История пока пуста</b><span>Изменения появятся здесь автоматически.</span></div>}</section>}
-```jsx
 function EmployeeManagement({user,stores,onChanged}){
   const [employees,setEmployees]=useState([]);
   const [loading,setLoading]=useState(true);
@@ -1028,9 +1027,11 @@ function EmployeeManagement({user,stores,onChanged}){
       setMsg(error.message);
     }else{
       await loadEmployees();
+
       if(typeof onChanged==='function'){
-  await onChanged();
-}
+        await onChanged();
+      }
+    }
 
     setBusy(null);
   };
@@ -1059,9 +1060,11 @@ function EmployeeManagement({user,stores,onChanged}){
       setEditingName(null);
       setNameDraft('');
       await loadEmployees();
+
       if(typeof onChanged==='function'){
-  await onChanged();
-}
+        await onChanged();
+      }
+    }
 
     setBusy(null);
   };
@@ -1262,6 +1265,7 @@ function EmployeeManagement({user,stores,onChanged}){
                 )}
 
                 <div className="muted">
+
                   {employee.role==='admin'
                     ?'Администратор'
                     :employee.role==='tm'
@@ -1272,11 +1276,12 @@ function EmployeeManagement({user,stores,onChanged}){
                   }
 
                   {employee.store_id && (
-  <>
-    {' · '}
-    {stores.find(s=>s.id===employee.store_id)?.name || employee.store_id}
-  </>
-)}
+                    <>
+                      {' · '}
+                      {stores.find(s=>s.id===employee.store_id)?.name || employee.store_id}
+                    </>
+                  )}
+
                 </div>
 
                 {employee.created_at&&(
@@ -1313,8 +1318,8 @@ function EmployeeManagement({user,stores,onChanged}){
                         changeUser(
                           employee,
                           newRole,
-                          employee.store_id
-                            ||stores.find(s=>s.is_active)?.id
+                          employee.store_id ||
+                          stores.find(s=>s.is_active)?.id
                         );
                       }
                     }}
@@ -1406,9 +1411,6 @@ function EmployeeManagement({user,stores,onChanged}){
     </div>
   );
 }
-```
-
-
 function Profile({user,session,stores,onStoresChanged,onLogout}){
   const [busy,setBusy]=useState(null);
   const [msg,setMsg]=useState('');
@@ -1449,11 +1451,14 @@ function Profile({user,session,stores,onStoresChanged,onLogout}){
                 :'СРТЗ / РТЗ'
           }
           {user.role!=='tm' &&
-            user.role!=='admin' &&
-            user.store_id
-              ?` · ${stores.find(s=>s.id===user.store_id)?.name||user.store_id}`
-              :''
-          }
+  user.role!=='admin' &&
+  user.store_id && (
+    <>
+      {' · '}
+      {stores.find(s=>s.id===user.store_id)?.name || user.store_id}
+    </>
+  )
+}
         </span>
 
         <small>{session.user.email}</small>
@@ -1516,5 +1521,12 @@ function Profile({user,session,stores,onStoresChanged,onLogout}){
     </section>
   );
 }
-if(import.meta.env.PROD && 'serviceWorker' in navigator) {window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));}
+if(import.meta.env.PROD && 'serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker
+      .register('/sroki-bandy/sw.js')
+      .catch(()=>{});
+  });
+}
+
 createRoot(document.getElementById('root')).render(<App/>);
