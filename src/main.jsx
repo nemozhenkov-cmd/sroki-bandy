@@ -155,31 +155,56 @@ const visibleStores=user?.role==='admin'
  {tab==='add'&&<Add stores={visibleStores} products={products} user={user} onClose={()=>setTab('home')} onSaved={()=>{loadData(user.id);setTab('home')}}/>}
 {tab==='recommendations'&&(
   <section className="recommendations">
-    <div className="list-head">
-      <b>Рекомендуем проверить</b>
-      <button onClick={()=>setTab('home')}>Назад</button>
+
+    <div className="recommendation-header">
+      <div>
+        <b>Рекомендуем проверить</b>
+      </div>
+
+      <button
+        className="recommendation-back"
+        onClick={()=>setTab('home')}
+      >
+        ← НАЗАД
+      </button>
     </div>
 
-    <p style={{margin:'0 0 16px',color:'#777',fontSize:14}}>
+    <p className="recommendation-subtitle">
       Товары из других магазинов с ближайшим сроком годности.
     </p>
 
-    <div className="list">
+    <div className="recommendation-list">
       {recommendations.map((item,index)=>(
-        <div className="item" key={index}>
-          <div className="item-main">
-            <b>{item.product_name}</b>
-            {item.brand&&<span>{item.brand}</span>}
-            <span>
-              Срок годности: {item.expiry_date.split('-').reverse().join('.')}
-            </span>
-            <span>
-              Магазины: {item.store_names.join(', ')}
-            </span>
+        <div className="recommendation-card" key={index}>
+
+          <div className="recommendation-product">
+            {item.product_name}
           </div>
+
+          {item.brand&&(
+            <div className="recommendation-brand">
+              {item.brand}
+            </div>
+          )}
+
+          <div className="recommendation-info">
+            <span>Срок годности</span>
+            <b>
+              {item.expiry_date.split('-').reverse().join('.')}
+            </b>
+          </div>
+
+          <div className="recommendation-info">
+            <span>Магазин</span>
+            <b>
+              {item.store_names.join(', ')}
+            </b>
+          </div>
+
         </div>
       ))}
     </div>
+
   </section>
 )}
  {tab==='stats'&&<Stats

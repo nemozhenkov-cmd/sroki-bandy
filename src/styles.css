@@ -140,3 +140,81 @@
 .recommend-button:active{
   transform:scale(.98);
 }
+.recommendation-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:10px;
+}
+
+.recommendation-header b{
+  font-size:20px;
+}
+
+.recommendation-back{
+  flex-shrink:0;
+  border:1px solid #d8d8d8;
+  border-radius:10px;
+  background:#fff;
+  padding:9px 13px;
+  font-size:13px;
+  font-weight:700;
+  cursor:pointer;
+}
+
+.recommendation-back:active{
+  transform:scale(.97);
+}
+
+.recommendation-subtitle{
+  margin:0 0 18px;
+  color:#777;
+  font-size:14px;
+  line-height:1.4;
+}
+
+.recommendation-list{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+.recommendation-card{
+  background:#fff;
+  border-radius:18px;
+  padding:17px 18px;
+  box-shadow:0 1px 4px rgba(0,0,0,.06);
+}
+
+.recommendation-product{
+  font-size:18px;
+  font-weight:700;
+  line-height:1.25;
+  margin-bottom:3px;
+}
+
+.recommendation-brand{
+  color:#777;
+  font-size:13px;
+  margin-bottom:14px;
+}
+
+.recommendation-info{
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  padding-top:10px;
+  margin-top:10px;
+  border-top:1px solid #eee;
+}
+
+.recommendation-info span{
+  color:#777;
+  font-size:12px;
+}
+
+.recommendation-info b{
+  font-size:15px;
+  line-height:1.3;
+}
