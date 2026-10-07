@@ -18,6 +18,7 @@ function localDate(){return new Date().toISOString().slice(0,10)}
 
 function App(){
  const [session,setSession]=useState(null),[loading,setLoading]=useState(true),[tab,setTab]=useState('home'),[store,setStore]=useState('all'),[q,setQ]=useState(''),[filter,setFilter]=useState('all'),[items,setItems]=useState([]),[products,setProducts]=useState([]),[stores,setStores]=useState(STORES),[user,setUser]=useState(null),[edit,setEdit]=useState(null),[scanner,setScanner]=useState(false),[error,setError]=useState('');
+const [recommendations,setRecommendations]=useState([]);
  const load=async()=>{
   if(!supabase){
     setLoading(false);
@@ -95,30 +96,10 @@ if(s?.length)setStores(s)}};
       ()=>{
         if(session?.user?.id){
           loadData(session.user.id);
-        }
-      }
-    )
-    .subscribe();
-
-  return()=>{
-    subscription.unsubscribe();
-    supabase.removeChannel(ch);
-  };
-},[session?.user?.id]);
- if(loading)return <Splash/>; if(!supabase)return <Setup/>; if(!session)return <Auth/>; if(!user)return <Onboard session={session} onDone={()=>loadData(session.user.id)}/>;
-const visibleStores=user?.role==='admin'
-  ?stores
-  :user?.store_id
-    ?stores.filter(s=>s.id===user.store_id && s.is_active)
-    :[];
- const filtered=items.filter(x=>store==='all'||x.store_id===store).filter(x=>{const st=statusFor(x.expiry_date);return filter==='all'||st===filter}).filter(x=>{const s=(x.products?.name+' '+(x.products?.brand||'')+' '+x.products?.barcode).toLowerCase();return s.includes(q.toLowerCase())});
- const counts={expired:items.filter(x=>statusFor(x.expiry_date)==='expired'&&(store==='all'||x.store_id===store)).length,soon:items.filter(x=>statusFor(x.expiry_date)==='soon'&&(store==='all'||x.store_id===store)).length,ok:items.filter(x=>statusFor(x.expiry_date)==='ok'&&(store==='all'||x.store_id===store)).length};
-const [recommendations,setRecommendations]=useState([]);
-
 useEffect(()=>{
   if(
-    user?.role!=='manager' &&
-    user?.role!=='srtz_rtz'
+    !user ||
+    (user.role!=='manager' && user.role!=='srtz_rtz')
   ){
     setRecommendations([]);
     return;
@@ -139,6 +120,25 @@ useEffect(()=>{
       setRecommendations(data||[]);
     });
 },[user?.id,user?.role,items]);
+        }
+      }
+    )
+    .subscribe();
+
+  return()=>{
+    subscription.unsubscribe();
+    supabase.removeChannel(ch);
+  };
+},[session?.user?.id]);
+ if(loading)return <Splash/>; if(!supabase)return <Setup/>; if(!session)return <Auth/>; if(!user)return <Onboard session={session} onDone={()=>loadData(session.user.id)}/>;
+const visibleStores=user?.role==='admin'
+  ?stores
+  :user?.store_id
+    ?stores.filter(s=>s.id===user.store_id && s.is_active)
+    :[];
+ const filtered=items.filter(x=>store==='all'||x.store_id===store).filter(x=>{const st=statusFor(x.expiry_date);return filter==='all'||st===filter}).filter(x=>{const s=(x.products?.name+' '+(x.products?.brand||'')+' '+x.products?.barcode).toLowerCase();return s.includes(q.toLowerCase())});
+ const counts={expired:items.filter(x=>statusFor(x.expiry_date)==='expired'&&(store==='all'||x.store_id===store)).length,soon:items.filter(x=>statusFor(x.expiry_date)==='soon'&&(store==='all'||x.store_id===store)).length,ok:items.filter(x=>statusFor(x.expiry_date)==='ok'&&(store==='all'||x.store_id===store)).length};
+
  return <div className="app"><header><div className="brand">Контроль Сроков Годности<span>Выберите ваш магазин для отображения данных</span></div><button className="icon" onClick={()=>setTab('profile')}><UserRound/></button></header>
  {tab==='home'&&<><div className="store-tabs">{[
   ...(user.role==='admin' ? [['all','ВСЕ']] : []),
