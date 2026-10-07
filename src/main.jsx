@@ -1028,8 +1028,9 @@ function EmployeeManagement({user,stores,onChanged}){
       setMsg(error.message);
     }else{
       await loadEmployees();
-      onChanged?.();
-    }
+      if(typeof onChanged==='function'){
+  await onChanged();
+}
 
     setBusy(null);
   };
@@ -1058,8 +1059,9 @@ function EmployeeManagement({user,stores,onChanged}){
       setEditingName(null);
       setNameDraft('');
       await loadEmployees();
-      onChanged?.();
-    }
+      if(typeof onChanged==='function'){
+  await onChanged();
+}
 
     setBusy(null);
   };
