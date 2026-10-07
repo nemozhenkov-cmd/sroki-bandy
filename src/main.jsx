@@ -48,7 +48,7 @@ function App(){
   supabase.from('products').select('*'),
   supabase.from('users').select('*').eq('id',uid).maybeSingle(),
   supabase.from('stores').select('*').order('name'),
-]);if(e1||e2||e3||e4||e5){setError((e1||e2||e3||e4||e5).message)}else{setItems(it||[]);setProducts(p||[]);
+]);if(e1||e2||e3||e4){setError((e1||e2||e3||e4||e5).message)}else{setItems(it||[]);setProducts(p||[]);
 setUser(u);
 
 if(u && u.role!=='admin' && u.store_id){
