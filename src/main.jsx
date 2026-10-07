@@ -113,46 +113,32 @@ const visibleStores=user?.role==='admin'
     :[];
  const filtered=items.filter(x=>store==='all'||x.store_id===store).filter(x=>{const st=statusFor(x.expiry_date);return filter==='all'||st===filter}).filter(x=>{const s=(x.products?.name+' '+(x.products?.brand||'')+' '+x.products?.barcode).toLowerCase();return s.includes(q.toLowerCase())});
  const counts={expired:items.filter(x=>statusFor(x.expiry_date)==='expired'&&(store==='all'||x.store_id===store)).length,soon:items.filter(x=>statusFor(x.expiry_date)==='soon'&&(store==='all'||x.store_id===store)).length,ok:items.filter(x=>statusFor(x.expiry_date)==='ok'&&(store==='all'||x.store_id===store)).length};
-const today=new Date();
-today.setHours(0,0,0,0);
+const [recommendations,setRecommendations]=useState([]);
 
-const recommendUntil=new Date(today);
-recommendUntil.setDate(recommendUntil.getDate()+7);
+useEffect(()=>{
+  if(
+    user?.role!=='manager' &&
+    user?.role!=='srtz_rtz'
+  ){
+    setRecommendations([]);
+    return;
+  }
 
-const recommendationMap={};
+  supabase
+    .rpc('get_store_recommendations')
+    .then(({data,error})=>{
+      if(error){
+        console.error(
+          'Ошибка рекомендаций:',
+          error
+        );
+        setRecommendations([]);
+        return;
+      }
 
-if(user.role==='manager'||user.role==='srtz_rtz'){
-  items.forEach(x=>{
-    if(x.store_id===user.store_id)return;
-
-    const targetStore=stores.find(s=>s.id===x.store_id);
-    if(!targetStore?.is_active)return;
-
-    const expiry=new Date(x.expiry_date+'T00:00:00');
-    if(expiry<today||expiry>recommendUntil)return;
-
-    const productId=x.product_id||x.products?.id;
-    const productName=x.products?.name||'Без названия';
-
-    const key=(productId||productName)+'_'+x.expiry_date;
-
-    if(!recommendationMap[key]){
-      recommendationMap[key]={
-        name:productName,
-        brand:x.products?.brand||'',
-        expiry_date:x.expiry_date,
-        stores:[]
-      };
-    }
-
-    if(!recommendationMap[key].stores.includes(targetStore.name)){
-      recommendationMap[key].stores.push(targetStore.name);
-    }
-  });
-}
-
-const recommendations=Object.values(recommendationMap)
-  .sort((a,b)=>a.expiry_date.localeCompare(b.expiry_date));
+      setRecommendations(data||[]);
+    });
+},[user?.id,user?.role,items]);
  return <div className="app"><header><div className="brand">Контроль Сроков Годности<span>Выберите ваш магазин для отображения данных</span></div><button className="icon" onClick={()=>setTab('profile')}><UserRound/></button></header>
  {tab==='home'&&<><div className="store-tabs">{[
   ...(user.role==='admin' ? [['all','ВСЕ']] : []),
@@ -192,13 +178,13 @@ const recommendations=Object.values(recommendationMap)
       {recommendations.map((item,index)=>(
         <div className="item" key={index}>
           <div className="item-main">
-            <b>{item.name}</b>
+            <b>{item.product_name}</b>
             {item.brand&&<span>{item.brand}</span>}
             <span>
               Срок годности: {formatDate(item.expiry_date)}
             </span>
             <span>
-              Магазины: {item.stores.join(', ')}
+              Магазины: {item.store_names.join(', ')}
             </span>
           </div>
         </div>
