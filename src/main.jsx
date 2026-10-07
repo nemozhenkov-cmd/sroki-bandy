@@ -1414,6 +1414,9 @@ function EmployeeManagement({user,stores,onChanged}){
 function Profile({user,session,stores,onStoresChanged,onLogout}){
   const [busy,setBusy]=useState(null);
   const [msg,setMsg]=useState('');
+  const [showAddStore,setShowAddStore]=useState(false);
+  const [newStoreName,setNewStoreName]=useState('');
+  const [newStoreAddress,setNewStoreAddress]=useState('');
 
   const toggleStore=async(store)=>{
     setBusy(store.id);
@@ -1432,7 +1435,43 @@ function Profile({user,session,stores,onStoresChanged,onLogout}){
 
     setBusy(null);
   };
+const addStore=async()=>{
+    const name=newStoreName.trim();
+    const address=newStoreAddress.trim();
 
+    if(!name){
+      setMsg('Введите название магазина.');
+      return;
+    }
+
+    if(!address){
+      setMsg('Введите адрес магазина.');
+      return;
+    }
+
+    setBusy('add-store');
+    setMsg('');
+
+    const {error}=await supabase
+      .from('stores')
+      .insert({
+        name,
+        address,
+        is_active:true
+      });
+
+    if(error){
+      setMsg(error.message);
+    }else{
+      setNewStoreName('');
+      setNewStoreAddress('');
+      setShowAddStore(false);
+      await onStoresChanged();
+      setMsg('Магазин успешно добавлен.');
+    }
+
+    setBusy(null);
+  };
   return (
     <section className="page">
       <h2>Профиль</h2>
@@ -1467,7 +1506,74 @@ function Profile({user,session,stores,onStoresChanged,onLogout}){
       {user.role==='admin' && (
         <>
           <h3 style={{marginTop:24}}>Магазины</h3>
+          <button
+            type="button"
+            className="primary"
+            onClick={()=>{
+              setShowAddStore(v=>!v);
+              setMsg('');
+            }}
+            disabled={busy==='add-store'}
+            style={{marginBottom:12}}
+          >
+            ＋ ДОБАВИТЬ МАГАЗИН
+          </button>
 
+          {showAddStore && (
+            <div
+              style={{
+                display:'grid',
+                gap:8,
+                marginBottom:16,
+                padding:14,
+                border:'1px solid #e5e5e5',
+                borderRadius:14,
+                background:'#fff'
+              }}
+            >
+              <input
+                value={newStoreName}
+                onChange={e=>setNewStoreName(e.target.value)}
+                placeholder="Название магазина"
+                disabled={busy==='add-store'}
+              />
+
+              <input
+                value={newStoreAddress}
+                onChange={e=>setNewStoreAddress(e.target.value)}
+                placeholder="Адрес магазина"
+                disabled={busy==='add-store'}
+              />
+
+              <div style={{display:'flex',gap:8}}>
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={addStore}
+                  disabled={busy==='add-store'}
+                >
+                  {busy==='add-store'
+                    ?'ДОБАВЛЕНИЕ…'
+                    :'ДОБАВИТЬ'
+                  }
+                </button>
+
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={()=>{
+                    setShowAddStore(false);
+                    setNewStoreName('');
+                    setNewStoreAddress('');
+                    setMsg('');
+                  }}
+                  disabled={busy==='add-store'}
+                >
+                  ОТМЕНА
+                </button>
+              </div>
+            </div>
+          )}
           <div className="store-admin-list">
             {stores.map(store=>(
               <div
