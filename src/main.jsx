@@ -50,7 +50,14 @@ function App(){
   supabase.from('users').select('*').eq('id',uid).maybeSingle(),
   supabase.from('stores').select('*').order('name'),
   supabase.from('user_activity').select('user_id,last_seen_at')
-]);if(e1||e2||e3||e4||e5){setError((e1||e2||e3||e4||e5).message)}else{setItems(it||[]);setProducts(p||[]);setUser(u);if(u)if(u){
+]);if(e1||e2||e3||e4||e5){setError((e1||e2||e3||e4||e5).message)}else{setItems(it||[]);setProducts(p||[]);
+setUser(u);
+
+if(u && u.role!=='admin' && u.store_id){
+  setStore(u.store_id);
+}
+
+if(u){
   const {error:activityError}=await supabase
     .rpc('touch_user_activity');
 
@@ -99,12 +106,14 @@ function App(){
  if(loading)return <Splash/>; if(!supabase)return <Setup/>; if(!session)return <Auth/>; if(!user)return <Onboard session={session} onDone={()=>loadData(session.user.id)}/>;
 const visibleStores=user?.role==='admin'
   ?stores
-  :stores.filter(s=>s.is_active);
+  :user?.store_id
+    ?stores.filter(s=>s.id===user.store_id && s.is_active)
+    :[];
  const filtered=items.filter(x=>store==='all'||x.store_id===store).filter(x=>{const st=statusFor(x.expiry_date);return filter==='all'||st===filter}).filter(x=>{const s=(x.products?.name+' '+(x.products?.brand||'')+' '+x.products?.barcode).toLowerCase();return s.includes(q.toLowerCase())});
  const counts={expired:items.filter(x=>statusFor(x.expiry_date)==='expired'&&(store==='all'||x.store_id===store)).length,soon:items.filter(x=>statusFor(x.expiry_date)==='soon'&&(store==='all'||x.store_id===store)).length,ok:items.filter(x=>statusFor(x.expiry_date)==='ok'&&(store==='all'||x.store_id===store)).length};
  return <div className="app"><header><div className="brand">Контроль Сроков Годности<span>Выберите ваш магазин для отображения данных</span></div><button className="icon" onClick={()=>setTab('profile')}><UserRound/></button></header>
  {tab==='home'&&<><div className="store-tabs">{[
-  ['all','ВСЕ'],
+  ...(user.role==='admin' ? [['all','ВСЕ']] : []),
   ...visibleStores.map(s=>[s.id,s.name.toUpperCase(),s.is_active])
 ].map(([id,n,isActive])=>(
   <button
@@ -119,7 +128,11 @@ const visibleStores=user?.role==='admin'
   </button>
 ))}</div><div className="stats"><Stat n={counts.expired} t="Просрочено" c="expired" on={()=>setFilter('expired')}/><Stat n={counts.soon} t="Скоро истекает" c="soon" on={()=>setFilter('soon')}/><Stat n={counts.ok} t="В порядке" c="ok" on={()=>setFilter('ok')}/></div><div className="search"><Search size={20}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Поиск товара или штрихкода"/>{q&&<X onClick={()=>setQ('')}/>}</div><div className="list-head"><b>{filter==='all'?'Все товары':filter==='expired'?'Просрочено':filter==='soon'?'Скоро истекает':'В порядке'}</b><button onClick={()=>setFilter('all')}>Сбросить</button></div><div className="list">{filtered.length?filtered.map(x=><Item key={x.id} x={x} onClick={()=>setEdit(x)}/>):<Empty/>}</div></>}
  {tab==='add'&&<Add stores={visibleStores} products={products} user={user} onClose={()=>setTab('home')} onSaved={()=>{loadData(user.id);setTab('home')}}/>}
- {tab==='stats'&&<Stats items={items} stores={visibleStores}/>} {tab==='history'&&<HistoryView/>} {tab==='profile'&&(
+ {tab==='stats'&&<Stats
+  items={items}
+  stores={visibleStores}
+  user={user}
+/>} {tab==='history'&&<HistoryView/>} {tab==='profile'&&(
   <Profile
     user={user}
     session={session}
@@ -780,8 +793,10 @@ function Add({stores,products,user,onClose,onSaved}){
  const save=async()=>{setBusy(true);const {data:{user}}=await supabase.auth.getUser();const r=await supabase.from('expiry_items').update({expiry_date:expiry,quantity:qty,store_id:store,note,updated_by:user.id}).eq('id',x.id);if(r.error)setMsg(r.error.message);else onSaved();setBusy(false)};
  const dispose=async()=>{setBusy(true);setMsg('');const {data:{user}}=await supabase.auth.getUser();const {error}=await supabase.from('expiry_items').update({is_disposed:true,updated_by:user.id,updated_at:new Date().toISOString()}).eq('id',x.id).eq('is_disposed',false);if(error){setMsg(error.message);setBusy(false);return}onSaved();};
  return <div className="modal"><div className="dialog"><div className="sheethead"><h2>{x.products?.name}</h2><button onClick={onClose}><X/></button></div><div className="muted">EAN {x.products?.barcode}</div><label>Срок<input type="date" value={expiry} onChange={e=>setExpiry(e.target.value)}/></label><label>Количество<input type="number" min="1" value={qty} onChange={e=>setQty(+e.target.value)}/></label><label>Магазин<select value={store} onChange={e=>setStore(e.target.value)}>{stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Комментарий"/><button className="primary" disabled={busy} onClick={save}>{busy?'СОХРАНЕНИЕ…':'СОХРАНИТЬ ИЗМЕНЕНИЯ'}</button><button className="danger" disabled={busy} onClick={dispose}><Trash2/>СПИСАТЬ</button>{msg&&<p className="msg">{msg}</p>}</div></div>}
-function Stats({items,stores}){
-  const [store,setStore]=useState('all');
+function Stats({items,stores,user}){
+  const [store,setStore]=useState(
+    user?.role==='admin' ? 'all' : user?.store_id || 'all'
+  );
   const [history,setHistory]=useState([]);
   const [employees,setEmployees]=useState([]);
   const [loading,setLoading]=useState(true);
