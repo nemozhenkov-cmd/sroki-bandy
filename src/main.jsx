@@ -171,7 +171,7 @@ const visibleStores=user?.role==='admin'
             <b>{item.product_name}</b>
             {item.brand&&<span>{item.brand}</span>}
             <span>
-              Срок годности: {formatDate(item.expiry_date)}
+              Срок годности: {item.expiry_date.split('-').reverse().join('.')}
             </span>
             <span>
               Магазины: {item.store_names.join(', ')}
