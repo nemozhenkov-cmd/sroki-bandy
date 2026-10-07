@@ -124,3 +124,19 @@
 .scanner > button{
   width:100%;
 }
+.recommend-button{
+  width:100%;
+  margin:0 0 14px;
+  padding:12px 14px;
+  border:1px solid #e6c400;
+  border-radius:12px;
+  background:#fff8c7;
+  color:#5f5200;
+  font-weight:700;
+  font-size:13px;
+  cursor:pointer;
+}
+
+.recommend-button:active{
+  transform:scale(.98);
+}

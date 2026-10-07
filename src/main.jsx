@@ -48,7 +48,7 @@ function App(){
   supabase.from('products').select('*'),
   supabase.from('users').select('*').eq('id',uid).maybeSingle(),
   supabase.from('stores').select('*').order('name'),
-]);if(e1||e2||e3||e4){setError((e1||e2||e3||e4||e5).message)}else{setItems(it||[]);setProducts(p||[]);
+]);if(e1||e2||e3||e4){setError((e1||e2||e3||e4).message)}else{setItems(it||[]);setProducts(p||[]);
 setUser(u);
 
 if(u && u.role!=='admin' && u.store_id){
@@ -113,6 +113,46 @@ const visibleStores=user?.role==='admin'
     :[];
  const filtered=items.filter(x=>store==='all'||x.store_id===store).filter(x=>{const st=statusFor(x.expiry_date);return filter==='all'||st===filter}).filter(x=>{const s=(x.products?.name+' '+(x.products?.brand||'')+' '+x.products?.barcode).toLowerCase();return s.includes(q.toLowerCase())});
  const counts={expired:items.filter(x=>statusFor(x.expiry_date)==='expired'&&(store==='all'||x.store_id===store)).length,soon:items.filter(x=>statusFor(x.expiry_date)==='soon'&&(store==='all'||x.store_id===store)).length,ok:items.filter(x=>statusFor(x.expiry_date)==='ok'&&(store==='all'||x.store_id===store)).length};
+const today=new Date();
+today.setHours(0,0,0,0);
+
+const recommendUntil=new Date(today);
+recommendUntil.setDate(recommendUntil.getDate()+7);
+
+const recommendationMap={};
+
+if(user.role==='manager'||user.role==='srtz_rtz'){
+  items.forEach(x=>{
+    if(x.store_id===user.store_id)return;
+
+    const targetStore=stores.find(s=>s.id===x.store_id);
+    if(!targetStore?.is_active)return;
+
+    const expiry=new Date(x.expiry_date+'T00:00:00');
+    if(expiry<today||expiry>recommendUntil)return;
+
+    const productId=x.product_id||x.products?.id;
+    const productName=x.products?.name||'Без названия';
+
+    const key=(productId||productName)+'_'+x.expiry_date;
+
+    if(!recommendationMap[key]){
+      recommendationMap[key]={
+        name:productName,
+        brand:x.products?.brand||'',
+        expiry_date:x.expiry_date,
+        stores:[]
+      };
+    }
+
+    if(!recommendationMap[key].stores.includes(targetStore.name)){
+      recommendationMap[key].stores.push(targetStore.name);
+    }
+  });
+}
+
+const recommendations=Object.values(recommendationMap)
+  .sort((a,b)=>a.expiry_date.localeCompare(b.expiry_date));
  return <div className="app"><header><div className="brand">Контроль Сроков Годности<span>Выберите ваш магазин для отображения данных</span></div><button className="icon" onClick={()=>setTab('profile')}><UserRound/></button></header>
  {tab==='home'&&<><div className="store-tabs">{[
   ...(user.role==='admin' ? [['all','ВСЕ']] : []),
@@ -128,8 +168,44 @@ const visibleStores=user?.role==='admin'
       <span style={{color:'#e53935',marginLeft:6}}>●</span>
     )}
   </button>
-))}</div><div className="stats"><Stat n={counts.expired} t="Просрочено" c="expired" on={()=>setFilter('expired')}/><Stat n={counts.soon} t="Скоро истекает" c="soon" on={()=>setFilter('soon')}/><Stat n={counts.ok} t="В порядке" c="ok" on={()=>setFilter('ok')}/></div><div className="search"><Search size={20}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Поиск товара или штрихкода"/>{q&&<X onClick={()=>setQ('')}/>}</div><div className="list-head"><b>{filter==='all'?'Все товары':filter==='expired'?'Просрочено':filter==='soon'?'Скоро истекает':'В порядке'}</b><button onClick={()=>setFilter('all')}>Сбросить</button></div><div className="list">{filtered.length?filtered.map(x=><Item key={x.id} x={x} onClick={()=>setEdit(x)}/>):<Empty/>}</div></>}
+))}</div>{(user.role==='manager'||user.role==='srtz_rtz')&&recommendations.length>0&&(
+  <button
+    className="recommend-button"
+    onClick={()=>setTab('recommendations')}
+  >
+    🟡 РЕКОМЕНДУЕМ ПРОВЕРИТЬ
+  </button>
+)}<div className="stats"><Stat n={counts.expired} t="Просрочено" c="expired" on={()=>setFilter('expired')}/><Stat n={counts.soon} t="Скоро истекает" c="soon" on={()=>setFilter('soon')}/><Stat n={counts.ok} t="В порядке" c="ok" on={()=>setFilter('ok')}/></div><div className="search"><Search size={20}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Поиск товара или штрихкода"/>{q&&<X onClick={()=>setQ('')}/>}</div><div className="list-head"><b>{filter==='all'?'Все товары':filter==='expired'?'Просрочено':filter==='soon'?'Скоро истекает':'В порядке'}</b><button onClick={()=>setFilter('all')}>Сбросить</button></div><div className="list">{filtered.length?filtered.map(x=><Item key={x.id} x={x} onClick={()=>setEdit(x)}/>):<Empty/>}</div></>}
  {tab==='add'&&<Add stores={visibleStores} products={products} user={user} onClose={()=>setTab('home')} onSaved={()=>{loadData(user.id);setTab('home')}}/>}
+{tab==='recommendations'&&(
+  <section className="recommendations">
+    <div className="list-head">
+      <b>Рекомендуем проверить</b>
+      <button onClick={()=>setTab('home')}>Назад</button>
+    </div>
+
+    <p style={{margin:'0 0 16px',color:'#777',fontSize:14}}>
+      Товары из других магазинов с ближайшим сроком годности.
+    </p>
+
+    <div className="list">
+      {recommendations.map((item,index)=>(
+        <div className="item" key={index}>
+          <div className="item-main">
+            <b>{item.name}</b>
+            {item.brand&&<span>{item.brand}</span>}
+            <span>
+              Срок годности: {formatDate(item.expiry_date)}
+            </span>
+            <span>
+              Магазины: {item.stores.join(', ')}
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  </section>
+)}
  {tab==='stats'&&<Stats
   items={items}
   stores={visibleStores}
