@@ -222,7 +222,150 @@ function Auth(){
       </div>
     </div>
   );
-}function Onboard({session,onDone}){const [name,setName]=useState(session.user.user_metadata?.name||''),[store,setStore]=useState('163'),[busy,setBusy]=useState(false),[msg,setMsg]=useState('');const save=async()=>{const cleanName=name.trim();if(!cleanName){setMsg('Введите имя сотрудника.');return}setBusy(true);setMsg('');try{const check=await supabase.from('users').select('id').eq('id',session.user.id).maybeSingle();if(check.error)throw check.error;let r;if(check.data){r=await supabase.from('users').update({name:cleanName,store_id:store}).eq('id',session.user.id).select().single()}else{r=await supabase.from('users').insert({id:session.user.id,name:cleanName,store_id:store,role:'srtz_rtz'}).select().single()}if(r.error)throw r.error;onDone()}catch(e){setMsg('Не удалось сохранить профиль: '+(e?.message||'неизвестная ошибка'))}finally{setBusy(false)}};return <div className="auth"><div className="logo">С</div><h2>Профиль сотрудника</h2><input placeholder="Имя" value={name} onChange={e=>setName(e.target.value)}/><select value={store} onChange={e=>setStore(e.target.value)}>{STORES.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select><button className="primary" disabled={busy} onClick={save}>{busy?'СОХРАНЕНИЕ…':'СОХРАНИТЬ'}</button>{msg&&<p className="msg">{msg}</p>}</div>}
+}function Onboard({session,onDone}){
+  const [name,setName]=useState(session.user.user_metadata?.name||'');
+  const [store,setStore]=useState('');
+  const [stores,setStores]=useState([]);
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState('');
+
+  useEffect(()=>{
+    (async()=>{
+      const {data,error}=await supabase
+        .from('stores')
+        .select('*')
+        .eq('is_active',true)
+        .order('name');
+
+      if(error){
+        setMsg('Не удалось загрузить магазины: '+error.message);
+        return;
+      }
+
+      const activeStores=data||[];
+      setStores(activeStores);
+
+      if(activeStores.length){
+        setStore(String(activeStores[0].id));
+      }
+    })();
+  },[]);
+
+  const save=async()=>{
+    const cleanName=name.trim();
+
+    if(!cleanName){
+      setMsg('Введите имя сотрудника.');
+      return;
+    }
+
+    if(!store){
+      setMsg('Выберите магазин.');
+      return;
+    }
+
+    setBusy(true);
+    setMsg('');
+
+    try{
+      const check=await supabase
+        .from('users')
+        .select('id')
+        .eq('id',session.user.id)
+        .maybeSingle();
+
+      if(check.error)throw check.error;
+
+      let r;
+
+      if(check.data){
+        r=await supabase
+          .from('users')
+          .update({
+            name:cleanName,
+            store_id:store
+          })
+          .eq('id',session.user.id)
+          .select()
+          .single();
+      }else{
+        r=await supabase
+          .from('users')
+          .insert({
+            id:session.user.id,
+            name:cleanName,
+            store_id:store,
+            role:'srtz_rtz'
+          })
+          .select()
+          .single();
+      }
+
+      if(r.error)throw r.error;
+
+      onDone();
+
+    }catch(e){
+      setMsg(
+        'Не удалось сохранить профиль: '+
+        (e?.message||'неизвестная ошибка')
+      );
+    }finally{
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="auth">
+      <div className="logo">С</div>
+
+      <h2>Профиль сотрудника</h2>
+
+      <input
+        placeholder="Имя"
+        value={name}
+        onChange={e=>setName(e.target.value)}
+      />
+
+      <select
+        value={store}
+        onChange={e=>setStore(e.target.value)}
+        disabled={!stores.length}
+      >
+        {!stores.length ? (
+          <option value="">
+            Нет доступных магазинов
+          </option>
+        ) : (
+          <>
+            <option value="">
+              Выберите магазин
+            </option>
+
+            {stores.map(s=>(
+              <option
+                key={s.id}
+                value={s.id}
+              >
+                {s.name}
+              </option>
+            ))}
+          </>
+        )}
+      </select>
+
+      <button
+        className="primary"
+        disabled={busy||!stores.length}
+        onClick={save}
+      >
+        {busy?'СОХРАНЕНИЕ…':'СОХРАНИТЬ'}
+      </button>
+
+      {msg&&<p className="msg">{msg}</p>}
+    </div>
+  );
+}
 function Stat({n,t,c,on}){return <button className={'stat '+c} onClick={on}><b>{n}</b><span>{t}</span></button>}
 function Item({x,onClick}){const s=statusFor(x.expiry_date);return <button className="item" onClick={onClick}><div className={'dot '+s}/><div className="itemmain"><h3>{x.products?.name||'Без названия'}</h3><div className="muted">EAN {x.products?.barcode} · {x.stores?.name}</div><strong>Срок: {fmt(x.expiry_date)}</strong><div className="days">{statusText(x.expiry_date)}</div><div className="muted">Количество: {x.quantity} · Добавил: {x.created?.name||'—'}</div></div></button>}
 function Empty(){return <div className="empty"><PackageCheck size={42}/><b>Ничего не найдено</b><span>Попробуйте изменить фильтр или добавить товар.</span></div>}
