@@ -224,9 +224,9 @@ const visibleStores=user?.role==='admin'
 function Splash(){
   return (
     <div className="splash">
-      <div className="logo">Ч</div>
-      <h1>Банда Видова</h1>
-      <p>Контроль сроков годности</p>
+      <div className="logo">Чижик</div>
+      <h1>Контроль сроков годности</h1>
+      <p>г. Новороссийск</p>
       <small>Автор: Неможенко В. 2787320</small>
     </div>
   );
@@ -259,10 +259,10 @@ function Auth(){
 
   return (
     <div className="auth">
-      <div className="logo">Ч</div>
+      <div className="logo">Чижик</div>
 
-      <h1>Банда Видова</h1>
-      <p>Контроль сроков годности</p>
+      <h1>Контроль сроков годности</h1>
+      <p>г. Новороссийск</p>
 
       {reg&&
         <input
@@ -396,7 +396,7 @@ function Auth(){
 
   return (
     <div className="auth">
-      <div className="logo">С</div>
+      <div className="logo">Чижик</div>
 
       <h2>Профиль сотрудника</h2>
 
@@ -759,7 +759,7 @@ function Add({stores,products,user,onClose,onSaved}){
   }
  };
 
- const save=async()=>{
+  const save=async()=>{
   if(!barcode||!name||!expiry){
    return setMsg('Заполните штрихкод, название и срок.');
   }
@@ -771,15 +771,17 @@ function Add({stores,products,user,onClose,onSaved}){
   setBusy(true);
   setMsg('');
 
+  const cleanBarcode=String(barcode).replace(/\D/g,'');
+
   let p=products.find(
-   p=>String(p.barcode||'').replace(/\D/g,'')===String(barcode).replace(/\D/g,'')
+   p=>String(p.barcode||'').replace(/\D/g,'')===cleanBarcode
   );
 
   if(!p){
    const r=await supabase
     .from('products')
     .insert({
-     barcode,
+     barcode:cleanBarcode,
      name,
      brand
     })
@@ -796,16 +798,17 @@ function Add({stores,products,user,onClose,onSaved}){
   }
 
   /*
-   * Проверяем, есть ли уже такой товар
-   * в этом магазине с точно таким же сроком.
+   * Ищем существующий активный товар
+   * с тем же товаром, магазином и сроком.
    */
   const {data:existing,error:existingError}=await supabase
    .from('expiry_items')
-   .select('id,quantity,expiry_date,store_id,product_id,products(name)')
+   .select('id,quantity,expiry_date,store_id,product_id')
    .eq('product_id',p.id)
    .eq('store_id',store)
    .eq('expiry_date',expiry)
    .eq('is_disposed',false)
+   .limit(1)
    .maybeSingle();
 
   if(existingError){
@@ -814,16 +817,10 @@ function Add({stores,products,user,onClose,onSaved}){
    return;
   }
 
-  /*
-   * Такой товар уже есть.
-   * Предлагаем заменить количество вместо создания дубля.
-   */
   if(existing){
-   const productTitle=existing.products?.name||name;
-
    const replace=window.confirm(
     `Товар уже добавлен.\n\n`+
-    `${productTitle}\n`+
+    `${name}\n`+
     `Срок годности: ${expiry.split('-').reverse().join('.')}\n`+
     `Текущее количество: ${existing.quantity}\n`+
     `Новое количество: ${qty}\n\n`+
@@ -856,7 +853,7 @@ function Add({stores,products,user,onClose,onSaved}){
   }
 
   /*
-   * Дубликата нет — создаём новую запись.
+   * Дубликата нет — добавляем новую запись.
    */
   const r=await supabase
    .from('expiry_items')
@@ -871,6 +868,54 @@ function Add({stores,products,user,onClose,onSaved}){
    });
 
   if(r.error){
+   /*
+    * Если другой запрос успел создать такую же запись
+    * раньше нас, уникальный индекс не позволит создать дубль.
+    */
+   if(r.error.code==='23505'){
+    const {data:raceExisting}=await supabase
+     .from('expiry_items')
+     .select('id,quantity')
+     .eq('product_id',p.id)
+     .eq('store_id',store)
+     .eq('expiry_date',expiry)
+     .eq('is_disposed',false)
+     .limit(1)
+     .maybeSingle();
+
+    if(raceExisting){
+     const replace=window.confirm(
+      `Товар уже был добавлен.\n\n`+
+      `${name}\n`+
+      `Срок годности: ${expiry.split('-').reverse().join('.')}\n`+
+      `Текущее количество: ${raceExisting.quantity}\n`+
+      `Новое количество: ${qty}\n\n`+
+      `Заменить количество на новое?`
+     );
+
+     if(replace){
+      const {error:updateError}=await supabase
+       .from('expiry_items')
+       .update({
+        quantity:qty,
+        note,
+        updated_by:user.id,
+        updated_at:new Date().toISOString()
+       })
+       .eq('id',raceExisting.id);
+
+      if(updateError){
+       setMsg(updateError.message);
+      }else{
+       onSaved();
+      }
+     }
+
+     setBusy(false);
+     return;
+    }
+   }
+
    setMsg(r.error.message);
   }else{
    onSaved();
