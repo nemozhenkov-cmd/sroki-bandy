@@ -764,9 +764,16 @@ function Add({stores,products,user,onClose,onSaved}){
    return setMsg('Заполните штрихкод, название и срок.');
   }
 
-  setBusy(true);
+  if(!qty||qty<1){
+   return setMsg('Количество должно быть не меньше 1.');
+  }
 
-  let p=products.find(p=>p.barcode===barcode);
+  setBusy(true);
+  setMsg('');
+
+  let p=products.find(
+   p=>String(p.barcode||'').replace(/\D/g,'')===String(barcode).replace(/\D/g,'')
+  );
 
   if(!p){
    const r=await supabase
@@ -788,6 +795,69 @@ function Add({stores,products,user,onClose,onSaved}){
    p=r.data;
   }
 
+  /*
+   * Проверяем, есть ли уже такой товар
+   * в этом магазине с точно таким же сроком.
+   */
+  const {data:existing,error:existingError}=await supabase
+   .from('expiry_items')
+   .select('id,quantity,expiry_date,store_id,product_id,products(name)')
+   .eq('product_id',p.id)
+   .eq('store_id',store)
+   .eq('expiry_date',expiry)
+   .eq('is_disposed',false)
+   .maybeSingle();
+
+  if(existingError){
+   setMsg(existingError.message);
+   setBusy(false);
+   return;
+  }
+
+  /*
+   * Такой товар уже есть.
+   * Предлагаем заменить количество вместо создания дубля.
+   */
+  if(existing){
+   const productTitle=existing.products?.name||name;
+
+   const replace=window.confirm(
+    `Товар уже добавлен.\n\n`+
+    `${productTitle}\n`+
+    `Срок годности: ${expiry.split('-').reverse().join('.')}\n`+
+    `Текущее количество: ${existing.quantity}\n`+
+    `Новое количество: ${qty}\n\n`+
+    `Заменить количество на новое?`
+   );
+
+   if(!replace){
+    setBusy(false);
+    return;
+   }
+
+   const {error:updateError}=await supabase
+    .from('expiry_items')
+    .update({
+     quantity:qty,
+     note,
+     updated_by:user.id,
+     updated_at:new Date().toISOString()
+    })
+    .eq('id',existing.id);
+
+   if(updateError){
+    setMsg(updateError.message);
+   }else{
+    onSaved();
+   }
+
+   setBusy(false);
+   return;
+  }
+
+  /*
+   * Дубликата нет — создаём новую запись.
+   */
   const r=await supabase
    .from('expiry_items')
    .insert({
