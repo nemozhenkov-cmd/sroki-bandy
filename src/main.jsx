@@ -51,7 +51,20 @@ const [recommendations,setRecommendations]=useState([]);
   supabase.from('stores').select('*').order('name'),
 ]);if(e1||e2||e3||e4){setError((e1||e2||e3||e4).message)}else{setItems(it||[]);setProducts(p||[]);
 setUser(u);
-
+if(u && (u.role==='manager'||u.role==='srtz_rtz')){
+  supabase
+    .rpc('get_store_recommendations')
+    .then(({data,error})=>{
+      if(error){
+        console.error('Ошибка рекомендаций:',error);
+        setRecommendations([]);
+      }else{
+        setRecommendations(data||[]);
+      }
+    });
+}else{
+  setRecommendations([]);
+}
 if(u && u.role!=='admin' && u.store_id){
   setStore(u.store_id);
 }
@@ -96,30 +109,7 @@ if(s?.length)setStores(s)}};
       ()=>{
         if(session?.user?.id){
           loadData(session.user.id);
-useEffect(()=>{
-  if(
-    !user ||
-    (user.role!=='manager' && user.role!=='srtz_rtz')
-  ){
-    setRecommendations([]);
-    return;
-  }
 
-  supabase
-    .rpc('get_store_recommendations')
-    .then(({data,error})=>{
-      if(error){
-        console.error(
-          'Ошибка рекомендаций:',
-          error
-        );
-        setRecommendations([]);
-        return;
-      }
-
-      setRecommendations(data||[]);
-    });
-},[user?.id,user?.role,items]);
         }
       }
     )
