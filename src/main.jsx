@@ -324,73 +324,80 @@ function Add({stores,products,user,onClose,onSaved}){
     }
 
     /*
-     * Сначала получаем разрешение на камеру.
-     * После этого браузер обычно начинает показывать
-     * реальные deviceId и названия камер.
+     * ГЛАВНОЕ:
+     * Сначала строго запрашиваем ЗАДНЮЮ камеру.
+     * exact: environment не позволяет браузеру
+     * самостоятельно выбрать фронтальную.
      */
-    let permissionStream=null;
+    const rearConstraints={
+      audio:false,
+      video:{
+        facingMode:{
+          exact:'environment'
+        },
+        width:{
+          ideal:1280
+        },
+        height:{
+          ideal:720
+        }
+      }
+    };
+
+    let controls;
 
     try{
-      permissionStream=await navigator.mediaDevices.getUserMedia({
-        audio:false,
-        video:{
-          facingMode:'environment'
+
+      controls=await reader.decodeFromConstraints(
+        rearConstraints,
+        videoRef.current,
+        (result,error)=>{
+          if(!result)return;
+
+          const code=result.getText().trim();
+          if(!code)return;
+
+          try{controls?.stop?.()}catch{}
+          try{reader.reset()}catch{}
+
+          scannerRef.current=null;
+          setScanning(false);
+          setBarcode(code);
+
+          find(code);
         }
-      });
-    }catch(permissionError){
-      console.warn('Не удалось получить разрешение на камеру:',permissionError);
-    }
+      );
 
-    if(permissionStream){
-      permissionStream.getTracks().forEach(track=>track.stop());
-    }
+    }catch(rearError){
 
-    const devices=await navigator.mediaDevices.enumerateDevices();
+      console.warn(
+        'Не удалось открыть заднюю камеру через exact environment:',
+        rearError
+      );
 
-    const cameras=devices.filter(
-      device=>device.kind==='videoinput'
-    );
+      /*
+       * Второй вариант.
+       *
+       * Получаем список камер и ищем только те,
+       * которые браузер помечает как задние.
+       */
+      let devices=[];
 
-    console.log('Доступные камеры:',cameras);
+      try{
+        devices=await navigator.mediaDevices.enumerateDevices();
+      }catch{}
 
-    /*
-     * Ищем заднюю камеру.
-     *
-     * Некоторые Android/браузеры передают в label:
-     * "back", "rear", "environment", "facing back"
-     *
-     * Ультраширокая камера часто содержит:
-     * "wide", "ultra", "0.5", "ultrawide"
-     *
-     * Поэтому такие камеры понижаем в приоритете.
-     */
-    const rearCameras=cameras.filter(camera=>{
-      const label=(camera.label||'').toLowerCase();
+      const cameras=devices.filter(
+        device=>device.kind==='videoinput'
+      );
 
-      const isRear=
-        label.includes('back') ||
-        label.includes('rear') ||
-        label.includes('environment') ||
-        label.includes('facing');
+      console.log('Камеры устройства:',cameras);
 
-      const isWide=
-        label.includes('wide') ||
-        label.includes('ultra') ||
-        label.includes('0.5');
-
-      return isRear&&!isWide;
-    });
-
-    /*
-     * Если браузер дал нормальные названия —
-     * берём первую подходящую заднюю камеру.
-     *
-     * Если названий нет — используем первую камеру,
-     * которую браузер считает задней через facingMode.
-     */
-    const selectedCamera=
-      rearCameras[0] ||
-      cameras.find(camera=>{
+      /*
+       * Никогда не берём камеру вслепую.
+       * Сначала ищем rear/back/environment.
+       */
+      const rearCamera=cameras.find(camera=>{
         const label=(camera.label||'').toLowerCase();
 
         return(
@@ -400,112 +407,23 @@ function Add({stores,products,user,onClose,onSaved}){
         );
       });
 
-    console.log(
-      'Выбранная камера:',
-      selectedCamera?.label,
-      selectedCamera?.deviceId
-    );
-
-    let controls;
-
-    /*
-     * Если удалось получить конкретную камеру,
-     * используем deviceId.
-     */
-    if(selectedCamera?.deviceId){
-
-      const constraints={
-        audio:false,
-        video:{
-          deviceId:{
-            exact:selectedCamera.deviceId
-          },
-          width:{
-            ideal:1280,
-            max:1920
-          },
-          height:{
-            ideal:720,
-            max:1080
-          },
-          aspectRatio:{
-            ideal:16/9
-          }
-        }
-      };
-
-      try{
-
-        controls=await reader.decodeFromConstraints(
-          constraints,
-          videoRef.current,
-          (result,error)=>{
-            if(!result)return;
-
-            const code=result.getText().trim();
-            if(!code)return;
-
-            try{controls?.stop?.()}catch{}
-            try{reader.reset()}catch{}
-
-            scannerRef.current=null;
-            setScanning(false);
-            setBarcode(code);
-
-            find(code);
-          }
-        );
-
-      }catch(cameraError){
-
-        console.warn(
-          'Не удалось запустить выбранную камеру:',
-          cameraError
-        );
-
-        /*
-         * Запасной вариант:
-         * просим любую заднюю камеру.
-         */
-        controls=await reader.decodeFromConstraints(
-          {
-            audio:false,
-            video:{
-              facingMode:'environment'
-            }
-          },
-          videoRef.current,
-          (result,error)=>{
-            if(!result)return;
-
-            const code=result.getText().trim();
-            if(!code)return;
-
-            try{controls?.stop?.()}catch{}
-            try{reader.reset()}catch{}
-
-            scannerRef.current=null;
-            setScanning(false);
-            setBarcode(code);
-
-            find(code);
-          }
-        );
+      if(!rearCamera?.deviceId){
+        throw rearError;
       }
 
-    }else{
-
-      /*
-       * Если браузер не дал список камер,
-       * оставляем совместимый fallback.
-       */
       controls=await reader.decodeFromConstraints(
         {
           audio:false,
           video:{
-            facingMode:'environment',
-            width:{ideal:1280},
-            height:{ideal:720}
+            deviceId:{
+              exact:rearCamera.deviceId
+            },
+            width:{
+              ideal:1280
+            },
+            height:{
+              ideal:720
+            }
           }
         },
         videoRef.current,
@@ -553,7 +471,6 @@ function Add({stores,products,user,onClose,onSaved}){
     }
   }
 };
-
  const find=async(rawCode)=>{
   const code=String(rawCode||'').replace(/\D/g,'');
   setBarcode(code);
