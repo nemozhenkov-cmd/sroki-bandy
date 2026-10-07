@@ -38,8 +38,7 @@ function App(){
   {data:it,error:e1},
   {data:p,error:e2},
   {data:u,error:e3},
-  {data:s,error:e4},
-  {data:a,error:e5}
+  {data:s,error:e4}
 ]=await Promise.all([
   supabase
   .from('expiry_items')
@@ -49,7 +48,6 @@ function App(){
   supabase.from('products').select('*'),
   supabase.from('users').select('*').eq('id',uid).maybeSingle(),
   supabase.from('stores').select('*').order('name'),
-  supabase.from('user_activity').select('user_id,last_seen_at')
 ]);if(e1||e2||e3||e4||e5){setError((e1||e2||e3||e4||e5).message)}else{setItems(it||[]);setProducts(p||[]);
 setUser(u);
 
@@ -58,14 +56,18 @@ if(u && u.role!=='admin' && u.store_id){
 }
 
 if(u){
-  const {error:activityError}=await supabase
-    .rpc('touch_user_activity');
-
-  if(activityError){
-    console.error('Ошибка обновления активности:',activityError);
-    setError('Ошибка активности: '+activityError.message);
-  }
-}if(s?.length)setStores(s)}};
+  supabase
+    .rpc('touch_user_activity')
+    .then(({error:activityError})=>{
+      if(activityError){
+        console.error(
+          'Ошибка обновления активности:',
+          activityError
+        );
+      }
+    });
+}
+if(s?.length)setStores(s)}};
  useEffect(()=>{
   load();
 
