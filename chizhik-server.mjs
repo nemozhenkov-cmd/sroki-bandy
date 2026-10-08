@@ -28,13 +28,15 @@ details: browserError
 
 try {
 const result = await page.evaluate(async (ean) => {
-const eanResponse = await fetch(
-`https://app.chizhik.club/delivery/api/catalog/v1/stores/HA4T/search-by-ean?ean=${encodeURIComponent(ean)}&mode=store`
-);
+const eanUrl =
+"https://app.chizhik.club/delivery/api/catalog/v1/stores/HA4T/search-by-ean?ean=" +
+encodeURIComponent(ean) +
+"&mode=store";
 
-```
+  const eanResponse = await fetch(eanUrl);
+
   if (!eanResponse.ok) {
-    throw new Error(`EAN API returned HTTP ${eanResponse.status}`);
+    throw new Error("EAN API returned HTTP " + eanResponse.status);
   }
 
   const eanData = await eanResponse.json();
@@ -44,17 +46,23 @@ const eanResponse = await fetch(
     return { found: false, ean };
   }
 
-  const productResponse = await fetch(
-    `https://app.chizhik.club/delivery/api/catalog/v2/stores/HA4T/products/${plu}?mode=store&include_restrict=true`
-  );
+  const productUrl =
+    "https://app.chizhik.club/delivery/api/catalog/v2/stores/HA4T/products/" +
+    encodeURIComponent(plu) +
+    "?mode=store&include_restrict=true";
+
+  const productResponse = await fetch(productUrl);
 
   if (!productResponse.ok) {
-    throw new Error(`Product API returned HTTP ${productResponse.status}`);
+    throw new Error(
+      "Product API returned HTTP " + productResponse.status
+    );
   }
 
   const product = await productResponse.json();
+
   const brandAttribute = (product.attributes || []).find(
-    attribute => attribute.name === "Бренд"
+    attribute => attribute.name === "\u0411\u0440\u0435\u043D\u0434"
   );
 
   return {
@@ -69,7 +77,6 @@ const eanResponse = await fetch(
 }, req.params.ean);
 
 res.json(result);
-```
 
 } catch (error) {
 console.error("Chizhik lookup failed:", error);
@@ -78,12 +85,13 @@ res.status(502).json({ error: String(error) });
 });
 
 app.listen(PORT, "0.0.0.0", () => {
-console.log(`Server started on port ${PORT}`);
+console.log("Server started on port " + PORT);
 startBrowser();
 });
 
 async function startBrowser() {
 if (browserStarting || browserReady) return;
+
 browserStarting = true;
 
 try {
@@ -91,7 +99,6 @@ console.log("Starting Chromium...");
 browser = await chromium.launch({ headless: true });
 page = await browser.newPage();
 
-```
 console.log("Opening Chizhik catalog...");
 await page.goto("https://chizhik.club/catalog/", {
   waitUntil: "domcontentloaded",
@@ -100,8 +107,8 @@ await page.goto("https://chizhik.club/catalog/", {
 
 browserReady = true;
 browserError = null;
+console.log("Current page URL:", page.url());
 console.log("Chizhik browser ready");
-```
 
 } catch (error) {
 browserError = String(error);
