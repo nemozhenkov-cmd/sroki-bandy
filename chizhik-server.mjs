@@ -88,7 +88,7 @@ browserStarting = true;
 
 try {
 console.log("Starting Chromium...");
-browser = await chromium.launch({ headless: false });
+browser = await chromium.launch({ headless: true });
 page = await browser.newPage();
 
 ```

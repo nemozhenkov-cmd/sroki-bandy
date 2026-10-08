@@ -12,4 +12,4 @@ COPY chizhik-server.mjs ./
 ENV PORT=10000
 EXPOSE 10000
 
-CMD ["xvfb-run", "--server-args=-screen 0 1280x720x24", "node", "chizhik-server.mjs"]
+CMD ["node", "chizhik-server.mjs"]
