@@ -56,6 +56,39 @@ app.get("/diagnostic", async (req, res) => {
 });
 
 
+app.get("/plu-diagnostic", async (req, res) => {
+  try {
+    const url =
+      "https://app.chizhik.club/delivery/api/catalog/v1/stores/HA4T/search-by-ean?ean=4606038083143&mode=store&include_restrict=true";
+
+    const response = await fetch(url, {
+      headers: {
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0"
+      },
+      signal: AbortSignal.timeout(15000)
+    });
+
+    const body = await response.text();
+
+    res.status(200).json({
+      test: "server-fetch",
+      httpStatus: response.status,
+      contentType: response.headers.get("content-type"),
+      body: body.slice(0, 1500)
+    });
+  } catch (error) {
+    res.status(200).json({
+      test: "server-fetch",
+      error: String(error),
+      cause: error.cause
+        ? String(error.cause)
+        : null
+    });
+  }
+});
+
+
 app.get("/chizhik/:ean", async (req, res) => {
 if (!browserReady || !page) {
 return res.status(503).json({
