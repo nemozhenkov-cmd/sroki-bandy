@@ -56,6 +56,118 @@ app.get("/diagnostic", async (req, res) => {
 });
 
 
+app.get("/browser-inspect", async (req, res) => {
+  if (!browserReady || !browser) {
+    return res.status(503).json({
+      ok: false,
+      browserReady,
+      browserError
+    });
+  }
+
+  let diagnosticPage;
+
+  try {
+    diagnosticPage = await browser.newPage();
+
+    const requests = [];
+    const responses = [];
+
+    diagnosticPage.on("request", request => {
+      const url = request.url();
+
+      if (
+        url.includes("chizhik.club") &&
+        (
+          url.includes("/api/") ||
+          url.includes("search") ||
+          url.includes("catalog")
+        )
+      ) {
+        requests.push({
+          method: request.method(),
+          url: url.slice(0, 500)
+        });
+      }
+    });
+
+    diagnosticPage.on("response", response => {
+      const url = response.url();
+
+      if (
+        url.includes("chizhik.club") &&
+        (
+          url.includes("/api/") ||
+          url.includes("search") ||
+          url.includes("catalog")
+        )
+      ) {
+        responses.push({
+          status: response.status(),
+          url: url.slice(0, 500)
+        });
+      }
+    });
+
+    await diagnosticPage.goto(
+      "https://chizhik.club/catalog/",
+      {
+        waitUntil: "domcontentloaded",
+        timeout: 45000
+      }
+    );
+
+    await diagnosticPage.waitForTimeout(5000);
+
+    const pageInfo = await diagnosticPage.evaluate(() => ({
+      title: document.title,
+      url: location.href,
+      inputs: Array.from(document.querySelectorAll("input"))
+        .map(el => ({
+          type: el.type,
+          placeholder: el.placeholder,
+          ariaLabel: el.getAttribute("aria-label"),
+          name: el.name,
+          visible: !!(
+            el.offsetWidth ||
+            el.offsetHeight ||
+            el.getClientRects().length
+          )
+        }))
+        .slice(0, 30),
+      buttons: Array.from(document.querySelectorAll("button"))
+        .map(el => ({
+          text: (el.innerText || "").trim().slice(0, 100),
+          ariaLabel: el.getAttribute("aria-label"),
+          visible: !!(
+            el.offsetWidth ||
+            el.offsetHeight ||
+            el.getClientRects().length
+          )
+        }))
+        .slice(0, 40),
+      pageText: (document.body.innerText || "").slice(0, 1500)
+    }));
+
+    res.json({
+      ok: true,
+      pageInfo,
+      requests: requests.slice(-40),
+      responses: responses.slice(-40)
+    });
+  } catch (error) {
+    res.status(502).json({
+      ok: false,
+      error: String(error)
+    });
+  } finally {
+    if (diagnosticPage) {
+      await diagnosticPage.close().catch(() => {});
+    }
+  }
+});
+
+
 app.get("/browser-plu-diagnostic", async (req, res) => {
   if (!browserReady || !page) {
     return res.status(503).json({
