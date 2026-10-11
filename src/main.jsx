@@ -759,171 +759,199 @@ function Add({stores,products,user,onClose,onSaved}){
   }
  };
 
-  const save=async()=>{
+
+const save=async()=>{
   if(!barcode||!name||!expiry){
-   return setMsg('Заполните штрихкод, название и срок.');
+    return setMsg('Заполните штрихкод, название и срок.');
   }
 
-  if(!qty||qty<1){
-   return setMsg('Количество должно быть не меньше 1.');
+  if(!Number.isInteger(Number(qty))||Number(qty)<1){
+    return setMsg('Количество должно быть целым числом не меньше 1.');
   }
 
   setBusy(true);
   setMsg('');
 
   const cleanBarcode=String(barcode).replace(/\D/g,'');
+  const newQuantity=Number(qty);
 
   let p=products.find(
-   p=>String(p.barcode||'').replace(/\D/g,'')===cleanBarcode
+    p=>String(p.barcode||'').replace(/\D/g,'')===cleanBarcode
   );
 
   if(!p){
-   const r=await supabase
-    .from('products')
-    .insert({
-     barcode:cleanBarcode,
-     name,
-     brand
-    })
-    .select()
-    .single();
+    const r=await supabase
+      .from('products')
+      .insert({
+        barcode:cleanBarcode,
+        name,
+        brand
+      })
+      .select()
+      .single();
 
-   if(r.error){
-    setMsg(r.error.message);
-    setBusy(false);
-    return;
-   }
+    if(r.error){
+      setMsg(r.error.message);
+      setBusy(false);
+      return;
+    }
 
-   p=r.data;
+    p=r.data;
   }
 
-  /*
-   * Ищем существующий активный товар
-   * с тем же товаром, магазином и сроком.
-   */
   const {data:existing,error:existingError}=await supabase
-   .from('expiry_items')
-   .select('id,quantity,expiry_date,store_id,product_id')
-   .eq('product_id',p.id)
-   .eq('store_id',store)
-   .eq('expiry_date',expiry)
-   .eq('is_disposed',false)
-   .limit(1)
-   .maybeSingle();
+    .from('expiry_items')
+    .select('id,quantity,expiry_date,store_id,product_id')
+    .eq('product_id',p.id)
+    .eq('store_id',store)
+    .eq('expiry_date',expiry)
+    .eq('is_disposed',false)
+    .limit(1)
+    .maybeSingle();
 
   if(existingError){
-   setMsg(existingError.message);
-   setBusy(false);
-   return;
+    setMsg(existingError.message);
+    setBusy(false);
+    return;
   }
 
   if(existing){
-   const replace=window.confirm(
-    `Товар уже добавлен.\n\n`+
-    `${name}\n`+
-    `Срок годности: ${expiry.split('-').reverse().join('.')}\n`+
-    `Текущее количество: ${existing.quantity}\n`+
-    `Новое количество: ${qty}\n\n`+
-    `Заменить количество на новое?`
-   );
+    setDuplicate({
+      id:existing.id,
+      currentQuantity:Number(existing.quantity),
+      newQuantity,
+      name,
+      expiry,
+      note,
+      productId:p.id,
+      storeId:store
+    });
 
-   if(!replace){
     setBusy(false);
     return;
-   }
-
-   const {error:updateError}=await supabase
-    .from('expiry_items')
-    .update({
-     quantity:qty,
-     note,
-     updated_by:user.id,
-     updated_at:new Date().toISOString()
-    })
-    .eq('id',existing.id);
-
-   if(updateError){
-    setMsg(updateError.message);
-   }else{
-    onSaved();
-   }
-
-   setBusy(false);
-   return;
   }
 
-  /*
-   * Дубликата нет — добавляем новую запись.
-   */
   const r=await supabase
-   .from('expiry_items')
-   .insert({
-    product_id:p.id,
-    store_id:store,
-    expiry_date:expiry,
-    quantity:qty,
-    note,
-    created_by:user.id,
-    updated_by:user.id
-   });
+    .from('expiry_items')
+    .insert({
+      product_id:p.id,
+      store_id:store,
+      expiry_date:expiry,
+      quantity:newQuantity,
+      note,
+      created_by:user.id,
+      updated_by:user.id
+    });
 
   if(r.error){
-   /*
-    * Если другой запрос успел создать такую же запись
-    * раньше нас, уникальный индекс не позволит создать дубль.
-    */
-   if(r.error.code==='23505'){
-    const {data:raceExisting}=await supabase
-     .from('expiry_items')
-     .select('id,quantity')
-     .eq('product_id',p.id)
-     .eq('store_id',store)
-     .eq('expiry_date',expiry)
-     .eq('is_disposed',false)
-     .limit(1)
-     .maybeSingle();
+    if(r.error.code==='23505'){
+      const {data:raceExisting,error:raceError}=await supabase
+        .from('expiry_items')
+        .select('id,quantity')
+        .eq('product_id',p.id)
+        .eq('store_id',store)
+        .eq('expiry_date',expiry)
+        .eq('is_disposed',false)
+        .limit(1)
+        .maybeSingle();
 
-    if(raceExisting){
-     const replace=window.confirm(
-      `Товар уже был добавлен.\n\n`+
-      `${name}\n`+
-      `Срок годности: ${expiry.split('-').reverse().join('.')}\n`+
-      `Текущее количество: ${raceExisting.quantity}\n`+
-      `Новое количество: ${qty}\n\n`+
-      `Заменить количество на новое?`
-     );
-
-     if(replace){
-      const {error:updateError}=await supabase
-       .from('expiry_items')
-       .update({
-        quantity:qty,
-        note,
-        updated_by:user.id,
-        updated_at:new Date().toISOString()
-       })
-       .eq('id',raceExisting.id);
-
-      if(updateError){
-       setMsg(updateError.message);
+      if(raceError){
+        setMsg(raceError.message);
+      }else if(raceExisting){
+        setDuplicate({
+          id:raceExisting.id,
+          currentQuantity:Number(raceExisting.quantity),
+          newQuantity,
+          name,
+          expiry,
+          note,
+          productId:p.id,
+          storeId:store
+        });
       }else{
-       onSaved();
+        setMsg(r.error.message);
       }
-     }
-
-     setBusy(false);
-     return;
+    }else{
+      setMsg(r.error.message);
     }
-   }
-
-   setMsg(r.error.message);
   }else{
-   onSaved();
+    onSaved();
   }
 
   setBusy(false);
- };
+};
 
+const finishDuplicate=async(action)=>{
+  if(!duplicate)return;
+
+  if(action==='cancel'){
+    setDuplicate(null);
+    setMsg('');
+    return;
+  }
+
+  setBusy(true);
+  setMsg('');
+
+  try{
+    const {data:latest,error:latestError}=await supabase
+      .from('expiry_items')
+      .select('id,quantity')
+      .eq('id',duplicate.id)
+      .eq('is_disposed',false)
+      .maybeSingle();
+
+    if(latestError)throw latestError;
+
+    if(!latest){
+      setDuplicate(null);
+      throw new Error('Запись уже удалена или списана. Повторите добавление.');
+    }
+
+    if(Number(latest.quantity)!==duplicate.currentQuantity){
+      setDuplicate({
+        ...duplicate,
+        currentQuantity:Number(latest.quantity)
+      });
+      setMsg('Количество изменилось. Проверьте расчёт и нажмите кнопку ещё раз.');
+      return;
+    }
+
+    if(action==='sum'){
+      const {error}=await supabase.rpc('add_expiry_quantity',{
+        p_item_id:duplicate.id,
+        p_quantity:duplicate.newQuantity,
+        p_note:duplicate.note
+      });
+
+      if(error)throw error;
+    }else if(action==='replace'){
+      const {data,error}=await supabase
+        .from('expiry_items')
+        .update({
+          quantity:duplicate.newQuantity,
+          note:duplicate.note,
+          updated_by:user.id,
+          updated_at:new Date().toISOString()
+        })
+        .eq('id',duplicate.id)
+        .eq('is_disposed',false)
+        .select('id')
+        .maybeSingle();
+
+      if(error)throw error;
+      if(!data)throw new Error('Запись уже изменена или списана. Повторите добавление.');
+    }
+
+    setDuplicate(null);
+    onSaved();
+
+  }catch(error){
+    setMsg(error.message||'Не удалось сохранить количество.');
+  }finally{
+    setBusy(false);
+  }
+};
  return (
   <section className="sheet">
 
@@ -1337,6 +1365,7 @@ function EmployeeManagement({user,stores,onChanged}){
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(null);
   const [msg,setMsg]=useState('');
+  const [duplicate,setDuplicate]=useState(null);
 
   const [roleFilter,setRoleFilter]=useState('all');
   const [newFilter,setNewFilter]=useState(false);
@@ -1991,9 +2020,55 @@ const {error}=await supabase
       >
         <LogOut/>
         ВЫЙТИ
-      </button>
-    </section>
-  );
+    </button>
+
+    {duplicate&&(
+      <div className="modal">
+        <div className="dialog">
+          <h2>Товар уже добавлен</h2>
+
+          <p><b>{duplicate.name}</b></p>
+
+          <p>
+            Срок годности: {
+              duplicate.expiry.split('-').reverse().join('.')
+            }
+          </p>
+
+          <p>Текущее количество: {duplicate.currentQuantity}</p>
+          <p>Новое количество: {duplicate.newQuantity}</p>
+
+          <button
+            className="primary"
+            disabled={busy}
+            onClick={()=>finishDuplicate('sum')}
+          >
+            Суммировать: {duplicate.currentQuantity} + {duplicate.newQuantity} = {
+              duplicate.currentQuantity+duplicate.newQuantity
+            }
+          </button>
+
+          <button
+            className="secondary"
+            disabled={busy}
+            onClick={()=>finishDuplicate('replace')}
+          >
+            Заменить: {duplicate.newQuantity}
+          </button>
+
+          <button
+            className="secondary"
+            disabled={busy}
+            onClick={()=>finishDuplicate('cancel')}
+          >
+            Отказаться
+          </button>
+        </div>
+      </div>
+    )}
+
+   </section>
+ );
 }
 if(import.meta.env.PROD && 'serviceWorker' in navigator){
   window.addEventListener('load',()=>{
