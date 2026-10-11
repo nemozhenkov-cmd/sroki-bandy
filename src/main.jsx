@@ -458,6 +458,7 @@ function Add({stores,products,user,onClose,onSaved}){
  [note,setNote]=useState(''),
  [busy,setBusy]=useState(false),
  [msg,setMsg]=useState(''),
+ [duplicate,setDuplicate]=useState(null),
  [scanning,setScanning]=useState(false),
  videoRef=useRef(null),
  scannerRef=useRef(null);
@@ -1151,10 +1152,56 @@ const finishDuplicate=async(action)=>{
    >
     {busy?'СОХРАНЕНИЕ…':'СОХРАНИТЬ'}
    </button>
+    {duplicate&&(
+      <div className="modal">
+        <div className="dialog">
+          <h2>Товар уже добавлен</h2>
 
-  </section>
+          <p><b>{duplicate.name}</b></p>
+
+          <p>
+            Срок годности: {
+              duplicate.expiry.split('-').reverse().join('.')
+            }
+          </p>
+
+          <p>Текущее количество: {duplicate.currentQuantity}</p>
+          <p>Новое количество: {duplicate.newQuantity}</p>
+
+          <button
+            className="primary"
+            disabled={busy}
+            onClick={()=>finishDuplicate('sum')}
+          >
+            Суммировать: {duplicate.currentQuantity} + {duplicate.newQuantity} = {
+              duplicate.currentQuantity+duplicate.newQuantity
+            }
+          </button>
+
+          <button
+            className="secondary"
+            disabled={busy}
+            onClick={()=>finishDuplicate('replace')}
+          >
+            Заменить: {duplicate.newQuantity}
+          </button>
+
+          <button
+            className="secondary"
+            disabled={busy}
+            onClick={()=>finishDuplicate('cancel')}
+          >
+            Отказаться
+          </button>
+        </div>
+      </div>
+    )}
+
+   </section>
  );
-}function Edit({x,stores,onClose,onSaved}){const [expiry,setExpiry]=useState(x.expiry_date),[qty,setQty]=useState(x.quantity),[store,setStore]=useState(x.store_id),[note,setNote]=useState(x.note||''),[busy,setBusy]=useState(false),[msg,setMsg]=useState('');
+}
+
+function Edit({x,stores,onClose,onSaved}){const [expiry,setExpiry]=useState(x.expiry_date),[qty,setQty]=useState(x.quantity),[store,setStore]=useState(x.store_id),[note,setNote]=useState(x.note||''),[busy,setBusy]=useState(false),[msg,setMsg]=useState('');
  const save=async()=>{setBusy(true);const {data:{user}}=await supabase.auth.getUser();const r=await supabase.from('expiry_items').update({expiry_date:expiry,quantity:qty,store_id:store,note,updated_by:user.id}).eq('id',x.id);if(r.error)setMsg(r.error.message);else onSaved();setBusy(false)};
  const dispose=async()=>{setBusy(true);setMsg('');const {data:{user}}=await supabase.auth.getUser();const {error}=await supabase.from('expiry_items').update({is_disposed:true,updated_by:user.id,updated_at:new Date().toISOString()}).eq('id',x.id).eq('is_disposed',false);if(error){setMsg(error.message);setBusy(false);return}onSaved();};
  return <div className="modal"><div className="dialog"><div className="sheethead"><h2>{x.products?.name}</h2><button onClick={onClose}><X/></button></div><div className="muted">EAN {x.products?.barcode}</div><label>Срок<input type="date" value={expiry} onChange={e=>setExpiry(e.target.value)}/></label><label>Количество<input type="number" min="1" value={qty} onChange={e=>setQty(+e.target.value)}/></label><label>Магазин<select value={store} onChange={e=>setStore(e.target.value)}>{stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Комментарий"/><button className="primary" disabled={busy} onClick={save}>{busy?'СОХРАНЕНИЕ…':'СОХРАНИТЬ ИЗМЕНЕНИЯ'}</button><button className="danger" disabled={busy} onClick={dispose}><Trash2/>СПИСАТЬ</button>{msg&&<p className="msg">{msg}</p>}</div></div>}
@@ -2014,62 +2061,18 @@ const {error}=await supabase
     onChanged={onStoresChanged}
   />
 )}
+
       <button
         className="secondary"
         onClick={onLogout}
       >
         <LogOut/>
         ВЫЙТИ
-    </button>
-
-    {duplicate&&(
-      <div className="modal">
-        <div className="dialog">
-          <h2>Товар уже добавлен</h2>
-
-          <p><b>{duplicate.name}</b></p>
-
-          <p>
-            Срок годности: {
-              duplicate.expiry.split('-').reverse().join('.')
-            }
-          </p>
-
-          <p>Текущее количество: {duplicate.currentQuantity}</p>
-          <p>Новое количество: {duplicate.newQuantity}</p>
-
-          <button
-            className="primary"
-            disabled={busy}
-            onClick={()=>finishDuplicate('sum')}
-          >
-            Суммировать: {duplicate.currentQuantity} + {duplicate.newQuantity} = {
-              duplicate.currentQuantity+duplicate.newQuantity
-            }
-          </button>
-
-          <button
-            className="secondary"
-            disabled={busy}
-            onClick={()=>finishDuplicate('replace')}
-          >
-            Заменить: {duplicate.newQuantity}
-          </button>
-
-          <button
-            className="secondary"
-            disabled={busy}
-            onClick={()=>finishDuplicate('cancel')}
-          >
-            Отказаться
-          </button>
-        </div>
-      </div>
-    )}
-
-   </section>
- );
+      </button>
+    </section>
+  );
 }
+
 if(import.meta.env.PROD && 'serviceWorker' in navigator){
   window.addEventListener('load',()=>{
     navigator.serviceWorker
