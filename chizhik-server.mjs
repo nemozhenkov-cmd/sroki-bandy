@@ -18,6 +18,44 @@ browserError
 });
 });
 
+
+app.get("/diagnostic", async (req, res) => {
+  if (!browserReady || !page) {
+    return res.status(503).json({
+      ok: false,
+      browserReady,
+      browserError
+    });
+  }
+
+  try {
+    const result = await page.evaluate(async () => {
+      const url =
+        "https://app.chizhik.club/delivery/api/catalog/v3/stores/HA4T/search?mode=store&include_restrict=true&q=салфетки%20та&limit=12";
+
+      const response = await fetch(url, {
+        credentials: "include"
+      });
+
+      const body = await response.text();
+
+      return {
+        status: response.status,
+        contentType: response.headers.get("content-type"),
+        bodyStart: body.slice(0, 500)
+      };
+    });
+
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    res.status(502).json({
+      ok: false,
+      error: String(error)
+    });
+  }
+});
+
+
 app.get("/chizhik/:ean", async (req, res) => {
 if (!browserReady || !page) {
 return res.status(503).json({
