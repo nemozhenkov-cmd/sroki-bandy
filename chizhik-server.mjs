@@ -33,7 +33,9 @@ const eanUrl =
 encodeURIComponent(ean) +
 "&mode=store";
 
-  const eanResponse = await fetch(eanUrl);
+  const eanResponse = await fetch(eanUrl, {
+  credentials: "include"
+});
 
   if (!eanResponse.ok) {
     throw new Error("EAN API returned HTTP " + eanResponse.status);
@@ -51,7 +53,9 @@ encodeURIComponent(ean) +
     encodeURIComponent(plu) +
     "?mode=store&include_restrict=true";
 
-  const productResponse = await fetch(productUrl);
+  const productResponse = await fetch(productUrl, {
+  credentials: "include"
+});
 
   if (!productResponse.ok) {
     throw new Error(
