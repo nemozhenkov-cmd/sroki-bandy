@@ -18,7 +18,10 @@ function localDate(){return new Date().toISOString().slice(0,10)}
 
 function App(){
  const [session,setSession]=useState(null),[loading,setLoading]=useState(true),[tab,setTab]=useState('home'),[store,setStore]=useState('all'),[q,setQ]=useState(''),[filter,setFilter]=useState('all'),[items,setItems]=useState([]),[products,setProducts]=useState([]),[stores,setStores]=useState(STORES),[user,setUser]=useState(null),[edit,setEdit]=useState(null),[scanner,setScanner]=useState(false),[error,setError]=useState('');
-const [recoveryMode,setRecoveryMode]=useState(false);
+const [recoveryMode,setRecoveryMode]=useState(
+  ()=>window.location.hash.includes('type=recovery')||
+     window.location.search.includes('type=recovery')
+);
 const [confirmationMessage,setConfirmationMessage]=useState(false);
 const [recommendations,setRecommendations]=useState([]);
  const load=async()=>{
