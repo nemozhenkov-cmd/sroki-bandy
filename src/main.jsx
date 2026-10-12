@@ -18,6 +18,8 @@ function localDate(){return new Date().toISOString().slice(0,10)}
 
 function App(){
  const [session,setSession]=useState(null),[loading,setLoading]=useState(true),[tab,setTab]=useState('home'),[store,setStore]=useState('all'),[q,setQ]=useState(''),[filter,setFilter]=useState('all'),[items,setItems]=useState([]),[products,setProducts]=useState([]),[stores,setStores]=useState(STORES),[user,setUser]=useState(null),[edit,setEdit]=useState(null),[scanner,setScanner]=useState(false),[error,setError]=useState('');
+const [recoveryMode,setRecoveryMode]=useState(false);
+const [confirmationMessage,setConfirmationMessage]=useState(false);
 const [recommendations,setRecommendations]=useState([]);
  const load=async()=>{
   if(!supabase){
@@ -89,6 +91,13 @@ if(s?.length)setStores(s)}};
 
   const {data:{subscription}}=supabase.auth.onAuthStateChange(
     async (_event,newSession)=>{
+      if(_event==='SIGNED_IN'&&window.location.hash.includes('type=signup')){
+  setConfirmationMessage(true);
+  window.history.replaceState({},document.title,window.location.pathname);
+}
+      if(_event==='PASSWORD_RECOVERY'){
+  setRecoveryMode(true);
+}
       setSession(newSession);
 
       if(newSession){
@@ -120,7 +129,24 @@ if(s?.length)setStores(s)}};
     supabase.removeChannel(ch);
   };
 },[session?.user?.id]);
- if(loading)return <Splash/>; if(!supabase)return <Setup/>; if(!session)return <Auth/>; if(!user)return <Onboard session={session} onDone={()=>loadData(session.user.id)}/>;
+ if(loading)return <Splash/>;
+if(!supabase)return <Setup/>;
+if(confirmationMessage)return (
+  <div className="auth">
+    <div className="logo">Чижик</div>
+    <h1>Почта подтверждена</h1>
+    <p>Почта подтверждена, вернитесь в приложение для продолжения.</p>
+    <button className="primary" onClick={()=>setConfirmationMessage(false)}>
+      ПРОДОЛЖИТЬ
+    </button>
+  </div>
+);
+if(recoveryMode)return <PasswordRecovery onDone={()=>{
+  setRecoveryMode(false);
+  setSession(null);
+}}/>;
+if(!session)return <Auth/>;
+if(!user)return <Onboard session={session} onDone={()=>loadData(session.user.id)}/>;
 const visibleStores=user?.role==='admin'
   ?stores
   :user?.store_id
@@ -241,24 +267,96 @@ function Auth(){
   const [pass,setPass]=useState('');
   const [name,setName]=useState('');
   const [reg,setReg]=useState(false);
+  const [recover,setRecover]=useState(false);
   const [msg,setMsg]=useState('');
+  const [busy,setBusy]=useState(false);
+
+  const friendlyError=(error)=>{
+    const m=(error?.message||'').toLowerCase();
+
+    if(m.includes('invalid login credentials'))
+      return 'Неверная почта или пароль.';
+    if(m.includes('email not confirmed'))
+      return 'Почта ещё не подтверждена. Откройте письмо и подтвердите адрес.';
+    if(m.includes('user already registered'))
+      return 'Аккаунт с такой почтой уже существует. Попробуйте войти или восстановить пароль.';
+    if(m.includes('password should be at least'))
+      return 'Пароль слишком короткий. Используйте не менее 6 символов.';
+    if(m.includes('unable to validate email address'))
+      return 'Проверьте правильность адреса электронной почты.';
+    if(m.includes('rate limit'))
+      return 'Слишком много попыток. Подождите немного и попробуйте снова.';
+
+    return error?.message||'Не удалось выполнить действие. Попробуйте ещё раз.';
+  };
 
   const go=async()=>{
-    let r=reg
-      ?await supabase.auth.signUp({
-          email,
-          password:pass,
-          options:{data:{name}}
-        })
-      :await supabase.auth.signInWithPassword({
-          email,
-          password:pass
-        });
+    const cleanEmail=email.trim();
 
-    if(r.error){
-      setMsg(r.error.message);
-    }else if(reg){
-      setMsg('Проверьте почту для подтверждения аккаунта.');
+    setMsg('');
+
+    if(!cleanEmail){
+      setMsg('Введите адрес электронной почты.');
+      return;
+    }
+
+    if(!recover&&!pass){
+      setMsg('Введите пароль.');
+      return;
+    }
+
+    if(reg&&!name.trim()){
+      setMsg('Введите фамилию и имя.');
+      return;
+    }
+
+    setBusy(true);
+
+    try{
+      if(recover){
+        const {error}=await supabase.auth.resetPasswordForEmail(
+          cleanEmail,
+          {
+            redirectTo:window.location.origin+import.meta.env.BASE_URL
+          }
+        );
+
+        if(error){
+          setMsg(friendlyError(error));
+        }else{
+          setMsg('Если аккаунт с этой почтой существует, на неё придёт письмо со ссылкой для восстановления пароля.');
+        }
+
+        return;
+      }
+
+      const r=reg
+        ?await supabase.auth.signUp({
+            email:cleanEmail,
+            password:pass,
+            options:{
+              data:{name:name.trim()},
+              emailRedirectTo:window.location.origin+import.meta.env.BASE_URL
+            }
+          })
+        :await supabase.auth.signInWithPassword({
+            email:cleanEmail,
+            password:pass
+          });
+
+      if(r.error){
+        setMsg(friendlyError(r.error));
+      }else if(reg){
+        if(r.data?.session){
+          setMsg('Регистрация выполнена.');
+        }else{
+          setMsg('Проверьте почту и подтвердите адрес. Затем вернитесь в приложение.');
+        }
+      }
+    }catch(e){
+      setMsg(friendlyError(e));
+    }finally{
+      setBusy(false);
     }
   };
 
@@ -269,7 +367,7 @@ function Auth(){
       <h1>Контроль сроков годности</h1>
       <p>г. Новороссийск</p>
 
-      {reg&&
+      {reg&&!recover&&
         <input
           placeholder="Фамилия и Имя"
           value={name}
@@ -284,29 +382,146 @@ function Auth(){
         onChange={e=>setEmail(e.target.value)}
       />
 
-      <input
-        type="password"
-        placeholder="Пароль"
-        value={pass}
-        onChange={e=>setPass(e.target.value)}
-      />
+      {!recover&&
+        <input
+          type="password"
+          placeholder="Пароль"
+          value={pass}
+          onChange={e=>setPass(e.target.value)}
+        />
+      }
 
-      <button className="primary" onClick={go}>
-        {reg?'СОЗДАТЬ АККАУНТ':'ВОЙТИ'}
+      <button
+        className="primary"
+        onClick={go}
+        disabled={busy}
+      >
+        {busy
+          ?'ПОДОЖДИТЕ...'
+          :recover
+            ?'ОТПРАВИТЬ ССЫЛКУ'
+            :reg
+              ?'СОЗДАТЬ АККАУНТ'
+              :'ВОЙТИ'}
       </button>
 
       {msg&&<p className="msg">{msg}</p>}
 
-      <button className="link" onClick={()=>setReg(!reg)}>
-        {reg?'У меня уже есть аккаунт':'Создать аккаунт'}
-      </button>
+      {!reg&&!recover&&
+        <button
+          className="link"
+          onClick={()=>{
+            setRecover(true);
+            setMsg('');
+          }}
+        >
+          Забыли пароль?
+        </button>
+      }
+
+      {recover&&
+        <button
+          className="link"
+          onClick={()=>{
+            setRecover(false);
+            setMsg('');
+          }}
+        >
+          Вернуться ко входу
+        </button>
+      }
+
+      {!recover&&
+        <button
+          className="link"
+          onClick={()=>{
+            setReg(!reg);
+            setMsg('');
+          }}
+        >
+          {reg?'У меня уже есть аккаунт':'Создать аккаунт'}
+        </button>
+      }
 
       <div className="auth-author">
         Автор: Неможенко В. 2787320
       </div>
     </div>
   );
-}function Onboard({session,onDone}){
+}
+function PasswordRecovery({onDone}){
+  const [pass,setPass]=useState('');
+  const [confirmPass,setConfirmPass]=useState('');
+  const [msg,setMsg]=useState('');
+  const [busy,setBusy]=useState(false);
+
+  const save=async()=>{
+    setMsg('');
+
+    if(pass.length<6){
+      setMsg('Пароль должен содержать не менее 6 символов.');
+      return;
+    }
+
+    if(pass!==confirmPass){
+      setMsg('Пароли не совпадают.');
+      return;
+    }
+
+    setBusy(true);
+
+    try{
+      const {error}=await supabase.auth.updateUser({password:pass});
+
+      if(error){
+        setMsg(error.message);
+        return;
+      }
+
+      await supabase.auth.signOut();
+      setMsg('Пароль изменён. Теперь войдите с новым паролем.');
+
+      setTimeout(()=>{
+        onDone();
+      },1500);
+    }catch(e){
+      setMsg(e?.message||'Не удалось изменить пароль.');
+    }finally{
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="auth">
+      <div className="logo">Чижик</div>
+      <h1>Новый пароль</h1>
+      <p>Придумайте новый пароль для входа.</p>
+
+      <input
+        type="password"
+        placeholder="Новый пароль"
+        value={pass}
+        onChange={e=>setPass(e.target.value)}
+      />
+
+      <input
+        type="password"
+        placeholder="Повторите новый пароль"
+        value={confirmPass}
+        onChange={e=>setConfirmPass(e.target.value)}
+      />
+
+      <button className="primary" onClick={save} disabled={busy}>
+        {busy?'СОХРАНЕНИЕ...':'СОХРАНИТЬ ПАРОЛЬ'}
+      </button>
+
+      {msg&&<p className="msg">{msg}</p>}
+    </div>
+  );
+}
+
+
+function Onboard({session,onDone}){
   const [name,setName]=useState(session.user.user_metadata?.name||'');
   const [store,setStore]=useState('');
   const [stores,setStores]=useState([]);

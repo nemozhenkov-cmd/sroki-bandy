@@ -1,5 +1,7 @@
-const CACHE = 'sroki-bandy-v4';
+
 const BASE = '/sroki-bandy/';
+const VERSION = new URL(self.location.href).searchParams.get('v') || 'legacy';
+const CACHE = `sroki-bandy-${VERSION}`;
 
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -11,19 +13,27 @@ self.addEventListener('install', event => {
       ])
     )
   );
+});
 
-  self.skipWaiting();
+self.addEventListener('message', event => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(
-        keys
-          .filter(key => key !== CACHE)
-          .map(key => caches.delete(key))
+    caches.keys()
+      .then(keys =>
+        Promise.all(
+          keys
+            .filter(key =>
+              key.startsWith('sroki-bandy-') && key !== CACHE
+            )
+            .map(key => caches.delete(key))
+        )
       )
-    ).then(() => self.clients.claim())
+      .then(() => self.clients.claim())
   );
 });
 
@@ -35,18 +45,27 @@ self.addEventListener('fetch', event => {
   if (url.origin !== self.location.origin) return;
 
   event.respondWith(
-    caches.match(event.request).then(cached => {
+    caches.open(CACHE).then(async cache => {
+      const cached = await cache.match(event.request);
+
       if (cached) return cached;
 
-      return fetch(event.request).then(response => {
+      try {
+        const response = await fetch(event.request);
+
         if (response.ok) {
-          const copy = response.clone();
-          caches.open(CACHE).then(cache =>
-            cache.put(event.request, copy)
-          );
+          await cache.put(event.request, response.clone());
         }
+
         return response;
-      }).catch(() => caches.match(`${BASE}index.html`));
+      } catch (error) {
+        if (event.request.mode === 'navigate') {
+          const fallback = await cache.match(`${BASE}index.html`);
+          if (fallback) return fallback;
+        }
+
+        throw error;
+      }
     })
   );
 });
