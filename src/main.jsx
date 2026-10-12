@@ -324,7 +324,7 @@ function Auth(){
         const {error}=await supabase.auth.resetPasswordForEmail(
           cleanEmail,
           {
-            redirectTo:window.location.origin+import.meta.env.BASE_URL
+            redirectTo:window.location.origin+import.meta.env.BASE_URL+'?type=recovery'
           }
         );
 
