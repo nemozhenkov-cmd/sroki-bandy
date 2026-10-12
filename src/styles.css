@@ -385,3 +385,8 @@
   padding: 11px;
   margin-top: 2px;
 }
+/* Принудительно скрываем шапку и навигацию при добавлении товара */
+.app.adding-product > header,
+.app.adding-product > nav {
+  display: none !important;
+}
