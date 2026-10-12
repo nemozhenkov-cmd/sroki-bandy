@@ -327,3 +327,61 @@
     padding: 16px;
   }
 }
+
+
+/* Полноэкранная форма добавления товара */
+.app.adding-product {
+  height: 100dvh;
+  min-height: 0;
+  padding-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app.adding-product > header,
+.app.adding-product > nav {
+  display: none;
+}
+
+.app.adding-product > .sheet {
+  flex: 1;
+  min-height: 0;
+  padding: 8px 2px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.app.adding-product .sheethead {
+  margin-bottom: 6px;
+}
+
+.app.adding-product .sheet h2 {
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.app.adding-product .sheet input,
+.app.adding-product .sheet select,
+.app.adding-product .sheet textarea {
+  padding: 8px 10px;
+  margin: 2px 0 5px;
+  min-height: 36px;
+  font-size: 14px;
+}
+
+.app.adding-product .sheet textarea {
+  min-height: 44px;
+  max-height: 60px;
+}
+
+.app.adding-product .scan {
+  padding: 10px;
+  margin-bottom: 6px;
+}
+
+.app.adding-product .sheet .primary {
+  padding: 11px;
+  margin-top: 2px;
+}
