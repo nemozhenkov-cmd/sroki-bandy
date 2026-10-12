@@ -95,7 +95,11 @@ if(s?.length)setStores(s)}};
   setConfirmationMessage(true);
   window.history.replaceState({},document.title,window.location.pathname);
 }
-      if(_event==='PASSWORD_RECOVERY'){
+      if(
+  _event==='PASSWORD_RECOVERY' ||
+  window.location.hash.includes('type=recovery') ||
+  window.location.search.includes('type=recovery')
+){
   setRecoveryMode(true);
 }
       setSession(newSession);
