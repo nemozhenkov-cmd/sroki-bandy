@@ -2078,12 +2078,161 @@ const {error}=await supabase
   );
 }
 
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register(`${import.meta.env.BASE_URL}sw.js`)
-      .catch(error => console.error('Ошибка Service Worker:', error));
-  });
+
+function UpdateManager() {
+  const [updateReady, setUpdateReady] = useState(false);
+  const [updateError, setUpdateError] = useState('');
+  const registrationRef = useRef(null);
+  const refreshingRef = useRef(false);
+
+  useEffect(() => {
+    if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
+
+    let registration;
+    let checkTimer;
+
+    const checkForUpdate = async () => {
+      try {
+        if (registrationRef.current) {
+          await registrationRef.current.update();
+        }
+      } catch (error) {
+        console.error('Ошибка проверки обновления:', error);
+      }
+    };
+
+    const showWaitingWorker = () => {
+      if (registration?.waiting && navigator.serviceWorker.controller) {
+        setUpdateReady(true);
+        setUpdateError('');
+      }
+    };
+
+    const handleControllerChange = () => {
+      if (refreshingRef.current) return;
+      refreshingRef.current = true;
+      window.location.reload();
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        checkForUpdate();
+      }
+    };
+
+    const start = async () => {
+      try {
+        registration = await navigator.serviceWorker.register(
+          `${import.meta.env.BASE_URL}sw.js?v=${encodeURIComponent(__APP_VERSION__)}`,
+          { updateViaCache: 'none' }
+        );
+
+        registrationRef.current = registration;
+
+        showWaitingWorker();
+
+        registration.addEventListener('updatefound', () => {
+          const worker = registration.installing;
+          if (!worker) return;
+
+          worker.addEventListener('statechange', () => {
+            if (worker.state === 'installed') {
+              showWaitingWorker();
+            }
+          });
+        });
+
+        await registration.update();
+
+        checkTimer = window.setInterval(checkForUpdate, 60000);
+      } catch (error) {
+        console.error('Ошибка регистрации Service Worker:', error);
+      }
+    };
+
+    const hadController = Boolean(navigator.serviceWorker.controller);
+
+    if (hadController) {
+      navigator.serviceWorker.addEventListener(
+        'controllerchange',
+        handleControllerChange
+      );
+    }
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    start();
+
+    return () => {
+      if (checkTimer) window.clearInterval(checkTimer);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      navigator.serviceWorker.removeEventListener(
+        'controllerchange',
+        handleControllerChange
+      );
+    };
+  }, []);
+
+  const applyUpdate = () => {
+    const worker = registrationRef.current?.waiting;
+
+    if (!worker) {
+      setUpdateError('Обновление ещё загружается. Попробуйте нажать кнопку ещё раз.');
+      registrationRef.current?.update().catch(console.error);
+      return;
+    }
+
+    setUpdateError('');
+    worker.postMessage({ type: 'SKIP_WAITING' });
+  };
+
+  if (!updateReady) return null;
+
+  return (
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      zIndex: 99999,
+      background: '#fff',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 24,
+      textAlign: 'center'
+    }}>
+      <div style={{ width: '100%', maxWidth: 360 }}>
+        <h2 style={{ marginBottom: 12 }}>Доступно обновление</h2>
+        <p style={{ marginBottom: 24 }}>
+          Чтобы продолжить работу, обновите приложение до актуальной версии.
+        </p>
+        {updateError && (
+          <p style={{ color: '#c62828', marginBottom: 16 }}>
+            {updateError}
+          </p>
+        )}
+        <button
+          onClick={applyUpdate}
+          style={{
+            width: '100%',
+            minHeight: 48,
+            border: 0,
+            borderRadius: 10,
+            background: '#f7c600',
+            color: '#111',
+            fontWeight: 700,
+            fontSize: 16,
+            cursor: 'pointer'
+          }}
+        >
+          ОБНОВИТЬ
+        </button>
+      </div>
+    </div>
+  );
 }
 
-createRoot(document.getElementById('root')).render(<App/>);
+createRoot(document.getElementById('root')).render(
+  <>
+    <App />
+    <UpdateManager />
+  </>
+);
