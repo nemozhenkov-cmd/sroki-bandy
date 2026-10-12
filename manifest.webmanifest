@@ -1,15 +1,20 @@
 {
-  "name":"КОНТРОЛЬ СГ",
-  "short_name":"КОНТРОЛЬ СГ",
-  "start_url":"/",
-  "scope":"/",
-  "display":"standalone",
-  "orientation":"portrait",
-  "background_color":"#f7f7f5",
-  "theme_color":"#f7c600",
-  "lang":"ru",
-  "description":"Контроль сроков годности для банды магазинов ЧИЖИК",
-  "icons":[
-    {"src":"/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}
+  "name": "Контроль СГ",
+  "short_name": "Контроль СГ",
+  "start_url": "/sroki-bandy/",
+  "scope": "/sroki-bandy/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f7f7f5",
+  "theme_color": "#f7c600",
+  "lang": "ru",
+  "description": "Контроль сроков годности товаров в магазинах",
+  "icons": [
+    {
+      "src": "/sroki-bandy/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
   ]
 }

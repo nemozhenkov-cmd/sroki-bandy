@@ -2073,11 +2073,11 @@ const {error}=await supabase
   );
 }
 
-if(import.meta.env.PROD && 'serviceWorker' in navigator){
-  window.addEventListener('load',()=>{
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
     navigator.serviceWorker
-      .register('/sroki-bandy/sw.js')
-      .catch(()=>{});
+      .register(`${import.meta.env.BASE_URL}sw.js`)
+      .catch(error => console.error('Ошибка Service Worker:', error));
   });
 }
 
