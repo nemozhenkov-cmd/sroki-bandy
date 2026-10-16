@@ -151,28 +151,43 @@ const loadData=async(uid)=>{
   }
 };
 
- useEffect(()=>{
+
+useEffect(()=>{
+  if(!supabase){
+    load();
+    return;
+  }
+
   load();
 
-  if(!supabase)return;
-
   const {data:{subscription}}=supabase.auth.onAuthStateChange(
-    async (_event,newSession)=>{
-      if(_event==='SIGNED_IN'&&window.location.hash.includes('type=signup')){
-  setConfirmationMessage(true);
-  window.history.replaceState({},document.title,window.location.pathname);
-}
+    (_event,newSession)=>{
       if(
-  _event==='PASSWORD_RECOVERY' ||
-  window.location.hash.includes('type=recovery') ||
-  window.location.search.includes('type=recovery')
-){
-  setRecoveryMode(true);
-}
+        _event==='SIGNED_IN'&&
+        window.location.hash.includes('type=signup')
+      ){
+        setConfirmationMessage(true);
+        window.history.replaceState(
+          {},
+          document.title,
+          window.location.pathname
+        );
+      }
+
+      if(
+        _event==='PASSWORD_RECOVERY' ||
+        window.location.hash.includes('type=recovery') ||
+        window.location.search.includes('type=recovery')
+      ){
+        setRecoveryMode(true);
+      }
+
       setSession(newSession);
 
-      if(newSession){
-        await loadData(newSession.user.id);
+      // Первичную загрузку выполняет load().
+      // Остальные события авторизации обрабатываем здесь.
+      if(_event!=='INITIAL_SESSION'&&newSession){
+        loadData(newSession.user.id);
       }
     }
   );
@@ -186,10 +201,12 @@ const loadData=async(uid)=>{
         schema:'public',
         table:'expiry_items'
       },
-      ()=>{
-        if(session?.user?.id){
-          loadData(session.user.id);
+      async ()=>{
+        const {data:{session:currentSession}}=
+          await supabase.auth.getSession();
 
+        if(currentSession){
+          loadData(currentSession.user.id);
         }
       }
     )
@@ -199,7 +216,8 @@ const loadData=async(uid)=>{
     subscription.unsubscribe();
     supabase.removeChannel(ch);
   };
-},[session?.user?.id]);
+},[]);
+
 
 if(loading)return <Splash/>;
 if(!supabase)return <Setup/>;
