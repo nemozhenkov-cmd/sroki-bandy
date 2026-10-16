@@ -64,53 +64,93 @@ const load=async()=>{
 };
 
 
- const loadData=async(uid)=>{const [
-  {data:it,error:e1},
-  {data:p,error:e2},
-  {data:u,error:e3},
-  {data:s,error:e4}
-]=await Promise.all([
-  supabase
-  .from('expiry_items')
-  .select('*,products(*),stores(*),created:created_by(name),updated:updated_by(name)')
-  .eq('is_disposed',false)
-  .order('expiry_date'),
-  supabase.from('products').select('*'),
-  supabase.from('users').select('*').eq('id',uid).maybeSingle(),
-  supabase.from('stores').select('*').order('name'),
-]);if(e1||e2||e3||e4){setError((e1||e2||e3||e4).message)}else{setItems(it||[]);setProducts(p||[]);
-setUser(u);
-if(u && (u.role==='manager'||u.role==='srtz_rtz')){
-  supabase
-    .rpc('get_store_recommendations')
-    .then(({data,error})=>{
-      if(error){
-        console.error('Ошибка рекомендаций:',error);
-        setRecommendations([]);
-      }else{
-        setRecommendations(data||[]);
-      }
-    });
-}else{
-  setRecommendations([]);
-}
-if(u && u.role!=='admin' && u.store_id){
-  setStore(u.store_id);
-}
 
-if(u){
-  supabase
-    .rpc('touch_user_activity')
-    .then(({error:activityError})=>{
-      if(activityError){
-        console.error(
-          'Ошибка обновления активности:',
-          activityError
-        );
+const loadData=async(uid)=>{
+  const queryTimeout=(label,query)=>Promise.race([
+    Promise.resolve(query).then(result=>{
+      console.log('[Контроль СГ] Загружено:',label);
+      if(result.error){
+        throw new Error(label+': '+result.error.message);
       }
-    });
-}
-if(s?.length)setStores(s)}};
+      return result;
+    }),
+    new Promise((_,reject)=>setTimeout(
+      ()=>reject(new Error(label+': превышено время ожидания 12 секунд')),
+      12000
+    ))
+  ]);
+
+  try{
+    console.log('[Контроль СГ] Начало загрузки данных');
+
+    const [
+      {data:it},
+      {data:p},
+      {data:u},
+      {data:s}
+    ]=await Promise.all([
+      queryTimeout(
+        'Сроки годности',
+        supabase.from('expiry_items')
+          .select('*,products(*),stores(*),created:created_by(name),updated:updated_by(name)')
+          .eq('is_disposed',false)
+          .order('expiry_date')
+      ),
+      queryTimeout(
+        'Справочник товаров',
+        supabase.from('products').select('*')
+      ),
+      queryTimeout(
+        'Профиль пользователя',
+        supabase.from('users').select('*')
+          .eq('id',uid).maybeSingle()
+      ),
+      queryTimeout(
+        'Список магазинов',
+        supabase.from('stores').select('*').order('name')
+      )
+    ]);
+
+    setItems(it||[]);
+    setProducts(p||[]);
+    setUser(u);
+
+    if(u && (u.role==='manager'||u.role==='srtz_rtz')){
+      supabase.rpc('get_store_recommendations')
+        .then(({data,error})=>{
+          if(error){
+            console.error('[Контроль СГ] Рекомендации:',error);
+            setRecommendations([]);
+          }else{
+            setRecommendations(data||[]);
+          }
+        })
+        .catch(err=>console.error('[Контроль СГ] Рекомендации:',err));
+    }else{
+      setRecommendations([]);
+    }
+
+    if(u && u.role!=='admin' && u.store_id){
+      setStore(u.store_id);
+    }
+
+    if(u){
+      supabase.rpc('touch_user_activity')
+        .then(({error})=>{
+          if(error) console.error('[Контроль СГ] Активность:',error);
+        })
+        .catch(err=>console.error('[Контроль СГ] Активность:',err));
+    }
+
+    if(s?.length) setStores(s);
+
+    console.log('[Контроль СГ] Все основные данные загружены');
+  }catch(err){
+    console.error('[Контроль СГ] Ошибка загрузки:',err);
+    setError(err?.message||'Не удалось загрузить данные.');
+  }
+};
+
  useEffect(()=>{
   load();
 
