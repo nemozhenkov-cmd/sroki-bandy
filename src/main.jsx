@@ -24,22 +24,46 @@ const [recoveryMode,setRecoveryMode]=useState(
 );
 const [confirmationMessage,setConfirmationMessage]=useState(false);
 const [recommendations,setRecommendations]=useState([]);
- const load=async()=>{
+
+
+const load=async()=>{
   if(!supabase){
     setLoading(false);
     return;
   }
 
-  const {data:{session}}=await supabase.auth.getSession();
+  const withTimeout=(promise,ms)=>Promise.race([
+    promise,
+    new Promise((_,reject)=>setTimeout(
+      ()=>reject(new Error('Сервер не ответил вовремя. Проверьте соединение и повторите попытку.')),
+      ms
+    ))
+  ]);
 
-  setSession(session);
+  try{
+    setError('');
 
-  if(session){
-    await loadData(session.user.id);
+    const {data:{session},error:sessionError}=await withTimeout(
+      supabase.auth.getSession(),
+      15000
+    );
+
+    if(sessionError) throw sessionError;
+
+    setSession(session);
+
+    if(session){
+      await withTimeout(loadData(session.user.id),20000);
+    }
+  }catch(err){
+    console.error('Ошибка загрузки приложения:',err);
+    setError(err?.message||'Не удалось загрузить данные. Попробуйте ещё раз.');
+  }finally{
+    setLoading(false);
   }
-
-  setLoading(false);
 };
+
+
  const loadData=async(uid)=>{const [
   {data:it,error:e1},
   {data:p,error:e2},
@@ -136,8 +160,23 @@ if(s?.length)setStores(s)}};
     supabase.removeChannel(ch);
   };
 },[session?.user?.id]);
- if(loading)return <Splash/>;
+
+if(loading)return <Splash/>;
 if(!supabase)return <Setup/>;
+if(error && session && !user)return (
+  <div className="center">
+    <h1>Не удалось загрузить приложение</h1>
+    <p>{error}</p>
+    <button className="primary" onClick={()=>{
+      setError('');
+      setLoading(true);
+      load();
+    }}>
+      ПОВТОРИТЬ
+    </button>
+  </div>
+);
+
 if(confirmationMessage)return (
   <div className="auth">
     <div className="logo">Чижик</div>
