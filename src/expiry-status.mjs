@@ -7,5 +7,5 @@ export function daysLeft(date, now = new Date()) {
 
 export function statusFor(date, now = new Date()) {
   const days = daysLeft(date, now);
-  return days < 0 ? 'expired' : days === 0 ? 'today' : days <= 3 ? 'soon' : 'ok';
+  return days <= 0 ? 'expired' : days === 1 ? 'today' : days <= 3 ? 'soon' : 'ok';
 }

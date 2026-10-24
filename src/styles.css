@@ -402,6 +402,11 @@
 .expiry-manufactured-date{display:grid;grid-template-columns:1fr 1.5fr 1fr;gap:8px}
 .expiry-manufactured-date select{min-width:0}
 
-.stat.today{box-shadow:inset 0 0 0 2px #dc4c4c}
-.dot.today{background:#dc4c4c}
+.stat.today{box-shadow:inset 0 0 0 2px #ed7900}
+.dot.today{background:#ed7900}
 @media(min-width:700px){.stats{grid-template-columns:repeat(4,1fr)}}
+
+.stat.expired{background:#fff1f1;box-shadow:inset 0 0 0 2px #b42318}
+.dot.expired{background:#b42318}
+.item.expired{background:#fff1f1}
+.expired-badge{display:inline-block;margin:0 0 8px;padding:4px 7px;border-radius:6px;background:#b42318;color:#fff;font-size:10px;font-weight:900;letter-spacing:.4px}
