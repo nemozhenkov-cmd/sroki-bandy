@@ -5,6 +5,7 @@ import {BarcodeFormat, DecodeHintType} from '@zxing/library';
 import {createClient} from '@supabase/supabase-js';
 import {Camera, Search, Plus, PackageCheck, AlertTriangle, Clock3, LogOut, History, BarChart3, UserRound, X, Check, Trash2, RefreshCw} from 'lucide-react';
 import './styles.css';
+import ExpiryCalculator from './ExpiryCalculator.jsx';
 import {withDeadline, queryWithDeadline} from './request-timeout.mjs';
 
 const supabaseUrl=import.meta.env.VITE_SUPABASE_URL, supabaseKey=import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -1343,6 +1344,8 @@ const finishDuplicate=async(action)=>{
     placeholder="Бренд (необязательно)"
    />
 
+   <ExpiryCalculator onApply={setExpiry}/>
+
    <label>
     Срок годности
 
@@ -1402,10 +1405,10 @@ const finishDuplicate=async(action)=>{
        e.target.value
       )}
      >
-      {Array.from(
+      {[...new Set([Number(expiryYear),...Array.from(
        {length:6},
        (_,i)=>new Date().getFullYear()+i
-      ).map(year=>(
+      )])].sort((a,b)=>a-b).map(year=>(
        <option
         key={year}
         value={year}
