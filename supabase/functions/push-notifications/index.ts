@@ -1,6 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
 import webpush from 'npm:web-push@3.6.7';
-import { APP_URL, validSubscription, moscowDay, dispatchWindow, tomorrow, countsFor, notificationBody } from './policy.mjs';
+import { APP_URL, validSubscription, moscowDay, dispatchSlot, tomorrow, countsFor, notificationBody } from './policy.mjs';
 
 const db = createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {auth:{persistSession:false,autoRefreshToken:false}});
 const headers = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS','Content-Type':'application/json','Cache-Control':'no-store'};
@@ -41,7 +41,8 @@ async function allRows(table:string,columns:string,filter?:(query:any)=>any) {
 }
 async function dispatch(config:any) {
   const now = new Date();
-  if(!config.enabled || !dispatchWindow(now)) return {sent:0,skipped:true};
+  const slot = dispatchSlot(now);
+  if(!config.enabled || !slot) return {sent:0,skipped:true};
   const date = moscowDay(now);
   const [subscriptions,users,stores,items] = await Promise.all([
     allRows('push_subscriptions','*'),
@@ -58,17 +59,17 @@ async function dispatch(config:any) {
     if(!user || !validSubscription(subscription)) continue;
     const counts = countsFor(user,stores,items,date);
     if(!counts.expired && !counts.today) continue;
-    const claimed = checked(await db.rpc('claim_push_delivery',{subscription_id:subscription.id,delivery_day:date}));
+    const claimed = checked(await db.rpc('claim_push_delivery',{subscription_id:subscription.id,delivery_day:date,delivery_slot:slot}));
     if(!claimed) continue;
     try {
-      const result = await send(subscription,config,{title:'Сроки годности',body:notificationBody(counts),tag:`expiry-${date}`});
+      const result = await send(subscription,config,{title:'Сроки годности',body:notificationBody(counts),tag:`expiry-${date}-${slot}`});
       if(result === 'sent') {
-        checked(await db.from('push_deliveries').update({state:'sent'}).eq('subscription_id',subscription.id).eq('delivery_day',date));
+        checked(await db.from('push_deliveries').update({state:'sent'}).eq('subscription_id',subscription.id).eq('delivery_day',date).eq('delivery_slot',slot));
         sent++;
       }
     } catch {
       // Do not log endpoints, encryption keys or product data.
-      checked(await db.from('push_deliveries').update({state:'failed',lease_until:new Date().toISOString()}).eq('subscription_id',subscription.id).eq('delivery_day',date));
+      checked(await db.from('push_deliveries').update({state:'failed',lease_until:new Date().toISOString()}).eq('subscription_id',subscription.id).eq('delivery_day',date).eq('delivery_slot',slot));
     }
   }
   checked(await db.from('push_deliveries').delete().lt('delivery_day',new Date(now.getTime()-30*86400000).toISOString().slice(0,10)));

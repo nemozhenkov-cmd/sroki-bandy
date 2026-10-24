@@ -11,10 +11,12 @@ export function validSubscription(s) {
 export function moscowDay(now = new Date()) {
   return new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
 }
-export function dispatchWindow(now = new Date()) {
+export function dispatchSlot(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Moscow',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(now).split(':').map(Number);
   const minute = parts[0]*60+parts[1];
-  return minute >= 510 && minute < 1320;
+  if(minute >= 510 && minute < 570) return 'morning';
+  if(minute >= 1110 && minute < 1170) return 'evening';
+  return null;
 }
 export function tomorrow(date) {
   return new Date(Date.parse(date+'T00:00:00Z')+86400000).toISOString().slice(0,10);
