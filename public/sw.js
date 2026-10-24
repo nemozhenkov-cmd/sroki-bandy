@@ -2,7 +2,7 @@
 const BASE = '/sroki-bandy/';
 const VERSION = new URL(self.location.href).searchParams.get('v') || 'legacy';
 // Change this marker when publishing a recovery so existing installations detect it.
-const RELEASE = 'calculator-expiry-boundary-1';
+const RELEASE = 'brand-design-1';
 const CACHE = `sroki-bandy-${RELEASE}-${VERSION}`;
 
 self.addEventListener('install', event => {
@@ -11,7 +11,9 @@ self.addEventListener('install', event => {
       cache.addAll([
         BASE,
         `${BASE}index.html`,
-        `${BASE}manifest.webmanifest`
+        `${BASE}manifest.webmanifest`,
+        `${BASE}brand/mascot-loading.webp`,
+        `${BASE}icon-192.png`
       ])
     )
   );
@@ -80,7 +82,7 @@ self.addEventListener('push', event => {
     typeof payload.title === 'string' ? payload.title.slice(0,100) : 'Сроки годности',
     {body:typeof payload.body === 'string' ? payload.body.slice(0,500) : 'Проверьте товары в приложении.',
      tag:typeof payload.tag === 'string' ? payload.tag.slice(0,100) : 'expiry-summary',
-     icon:BASE+'icon.svg',data:{url:BASE}}
+     icon:BASE+'icon-192.png',data:{url:BASE}}
   ));
 });
 self.addEventListener('notificationclick', event => {
