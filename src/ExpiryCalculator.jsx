@@ -50,9 +50,9 @@ export default function ExpiryCalculator({onApply}) {
           </select>
         </label>
       </div>
-      <p role="status">{expiry?`Дата окончания: ${formatted}`:'Укажите дату изготовления и целый положительный срок.'}</p>
+      <p role="status">{expiry?`Годен до: ${formatted}`:'Укажите дату изготовления и целый положительный срок.'}</p>
       <button type="button" className="primary" disabled={!expiry} onClick={()=>{onApply(expiry);setOpen(false)}}>ПОДСТАВИТЬ ДАТУ</button>
-      <small>Дата изготовления — первый день срока. Проверьте результат по маркировке товара.</small>
+      <small>К дате изготовления прибавляется полный срок. Полученная дата — первый день, когда товар уже просрочен. Проверьте результат по маркировке товара.</small>
     </div>}
   </div>;
 }

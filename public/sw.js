@@ -2,7 +2,7 @@
 const BASE = '/sroki-bandy/';
 const VERSION = new URL(self.location.href).searchParams.get('v') || 'legacy';
 // Change this marker when publishing a recovery so existing installations detect it.
-const RELEASE = 'pwa-push-notifications-2';
+const RELEASE = 'calculator-expiry-boundary-1';
 const CACHE = `sroki-bandy-${RELEASE}-${VERSION}`;
 
 self.addEventListener('install', event => {

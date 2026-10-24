@@ -2,7 +2,7 @@ export function localDate(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-// Date of manufacture is day one: calculate the calendar boundary, then subtract one day.
+// Store the exclusive expiry boundary: manufacturing date plus the full shelf life.
 export function calculateExpiry(manufactured, amount, unit) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(manufactured)) return '';
   const [year, month, day] = manufactured.split('-').map(Number);
@@ -20,7 +20,6 @@ export function calculateExpiry(manufactured, amount, unit) {
     date.setUTCDate(Math.min(day, lastDay));
   }
   if (!Number.isFinite(date.getTime())) return '';
-  date.setUTCDate(date.getUTCDate()-1);
   if (!Number.isFinite(date.getTime()) || date.getUTCFullYear() < year || date.getUTCFullYear() > 9999) return '';
   return date.toISOString().slice(0, 10);
 }
