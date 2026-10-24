@@ -3,7 +3,7 @@
 Visual refresh based on the approved white/yellow (#FFD400) mockups and supplied official mascot reference. No database, role, expiry calculation, notification schedule or stock mutation changes.
 
 - Home: four status cards remain in one horizontal row at 320/390/430px widths; selected filter is explicit; compact mascot; store selector replaces tabs; only bottom navigation links to Profile.
-- Product cards preserve date, status, quantity, barcode, store and creator, with a new visual hierarchy.
+- Compact product cards show name, status, date and quantity. Barcode, store, creator and detailed day count remain in the item dialog. Measured card heights: 94px normally, about 105px for a long two-line title. On the tested 390px-wide viewport, 700px height fits 3 full cards, 844px fits 4; 430x926 fits 5. The home header and gaps are reduced; long titles wrap to at most two lines and remain fully available in the dialog.
 - Add/edit, calculator, statistics, history, profile, employee/store controls, authentication, recovery and onboarding share typography, fields, buttons, spacing and surfaces.
 - Loading and existing mandatory update flow use distinct lightweight transparent mascot assets. Update detection and activation handlers are unchanged; a new defer-update feature is outside this visual change.
 - Existing date editing uses three accessible dropdowns; month-end dates clamp to the last valid calendar day, as in the existing add form.

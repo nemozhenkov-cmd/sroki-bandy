@@ -245,7 +245,7 @@ const visibleStores=user?.role==='admin'
  const counts={today:items.filter(x=>statusFor(x.expiry_date)==='today'&&(store==='all'||x.store_id===store)).length,expired:items.filter(x=>statusFor(x.expiry_date)==='expired'&&(store==='all'||x.store_id===store)).length,soon:items.filter(x=>statusFor(x.expiry_date)==='soon'&&(store==='all'||x.store_id===store)).length,ok:items.filter(x=>statusFor(x.expiry_date)==='ok'&&(store==='all'||x.store_id===store)).length};
 
  return (
-  <div className={`app ${tab === 'add' ? 'adding-product' : ''}`}>
+  <div className={`app ${tab === 'add' ? 'adding-product' : tab === 'home' ? 'home-screen' : ''}`}>
 <header className="app-header"><Wordmark/></header>
  {tab==='home'&&<><section className="home-hero"><div className="hero-copy"><h1>Сроки<br/>под контролем</h1><div className="store-picker"><MapPin size={18}/><select aria-label="Магазин" value={store} onChange={e=>setStore(e.target.value)}>{user.role==='admin'&&<option value="all">Все магазины</option>}{visibleStores.map(s=><option key={s.id} value={s.id}>{s.name}{!s.is_active?' · Неактивен':''}</option>)}</select><ChevronDown size={16}/></div></div><Mascot className="hero-mascot"/></section>{(user.role==='manager'||user.role==='srtz_rtz')&&recommendations.length>0&&(
   <button
@@ -734,7 +734,18 @@ function Onboard({session,onDone}){
 }
 const statusLabels={expired:'Просрочено',today:'Списать сегодня',soon:'Скоро истекает',ok:'В порядке'};
 function Stat({n,t,c,on,selected}){return <button className={'stat '+c+(selected?' selected':'')} onClick={on} aria-pressed={selected}><b>{n}</b><span>{t}</span>{selected&&<Check size={12} className="stat-check"/>}</button>;}
-function Item({x,onClick}){const s=statusFor(x.expiry_date);return <button className={'item '+s} onClick={onClick}><div className="itemmain"><h3>{x.products?.name||'Без названия'}</h3><div className="item-details"><div><span className={'status-badge '+s}>{s==='expired'?<AlertTriangle size={13}/>:s==='ok'?<Check size={13}/>:<Clock3 size={13}/>} {statusLabels[s]}</span><strong>Годен до <b>{fmt(x.expiry_date)}</b></strong></div><span className="item-quantity">{x.quantity} <small>шт.</small></span><ChevronRight size={18} className="item-chevron"/></div><div className="days">{statusText(x.expiry_date)}</div><div className="muted">EAN {x.products?.barcode} · {x.stores?.name}</div><div className="item-author">Добавил: {x.created?.name||'—'}</div></div></button>;}
+function Item({x,onClick}){
+  const s=statusFor(x.expiry_date);
+  return <button className={'item '+s} onClick={onClick} title={x.products?.name}>
+    <div className="itemmain">
+      <h3>{x.products?.name||'Без названия'}</h3>
+      <div className="item-details">
+        <div><span className={'status-badge '+s}>{s==='expired'?<AlertTriangle size={13}/>:s==='ok'?<Check size={13}/>:<Clock3 size={13}/>} {statusLabels[s]}</span><strong>Годен до <b>{fmt(x.expiry_date)}</b></strong></div>
+        <span className="item-quantity">{x.quantity} <small>шт.</small></span><ChevronRight size={18} className="item-chevron"/>
+      </div>
+    </div>
+  </button>;
+}
 function Empty(){return <div className="empty"><Mascot/><b>Ничего не найдено</b><span>Попробуйте изменить фильтр<br/>или добавить товар.</span></div>;}
 function Add({stores,products,user,onClose,onSaved}){
  const [barcode,setBarcode]=useState(''),
@@ -1492,7 +1503,7 @@ const finishDuplicate=async(action)=>{
 function Edit({x,stores,onClose,onSaved}){const [expiry,setExpiry]=useState(x.expiry_date),[qty,setQty]=useState(x.quantity),[store,setStore]=useState(x.store_id),[note,setNote]=useState(x.note||''),[busy,setBusy]=useState(false),[msg,setMsg]=useState('');
  const save=async()=>{setBusy(true);const {data:{user}}=await supabase.auth.getUser();const r=await supabase.from('expiry_items').update({expiry_date:expiry,quantity:qty,store_id:store,note,updated_by:user.id}).eq('id',x.id);if(r.error)setMsg(r.error.message);else onSaved();setBusy(false)};
  const dispose=async()=>{setBusy(true);setMsg('');const {data:{user}}=await supabase.auth.getUser();const {error}=await supabase.from('expiry_items').update({is_disposed:true,updated_by:user.id,updated_at:new Date().toISOString()}).eq('id',x.id).eq('is_disposed',false);if(error){setMsg(error.message);setBusy(false);return}onSaved();};
- return <div className="modal"><div className="dialog"><div className="sheethead"><h2>{x.products?.name}</h2><button className="close-button" aria-label="Закрыть" onClick={onClose}><X/></button></div><div className="muted">EAN {x.products?.barcode}</div><DateFields value={expiry} onChange={setExpiry}/><label>Количество<input type="number" min="1" value={qty} onChange={e=>setQty(+e.target.value)}/></label><label>Магазин<select value={store} onChange={e=>setStore(e.target.value)}>{stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Комментарий"/><button className="primary" disabled={busy} onClick={save}>{busy?'СОХРАНЕНИЕ…':'СОХРАНИТЬ ИЗМЕНЕНИЯ'}</button><button className="danger" disabled={busy} onClick={dispose}><Trash2/>СПИСАТЬ</button>{msg&&<p className="msg">{msg}</p>}</div></div>}
+ return <div className="modal"><div className="dialog"><div className="sheethead"><h2>{x.products?.name}</h2><button className="close-button" aria-label="Закрыть" onClick={onClose}><X/></button></div><div className="item-info"><b>{statusText(x.expiry_date)}</b><span>EAN {x.products?.barcode}</span><span>Магазин: {x.stores?.name||'—'}</span><span>Добавил: {x.created?.name||'—'}</span></div><DateFields value={expiry} onChange={setExpiry}/><label>Количество<input type="number" min="1" value={qty} onChange={e=>setQty(+e.target.value)}/></label><label>Магазин<select value={store} onChange={e=>setStore(e.target.value)}>{stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Комментарий"/><button className="primary" disabled={busy} onClick={save}>{busy?'СОХРАНЕНИЕ…':'СОХРАНИТЬ ИЗМЕНЕНИЯ'}</button><button className="danger" disabled={busy} onClick={dispose}><Trash2/>СПИСАТЬ</button>{msg&&<p className="msg">{msg}</p>}</div></div>}
 function Stats({items,stores,user}){
   const [store,setStore]=useState(
     user?.role==='admin' ? 'all' : user?.store_id || 'all'
