@@ -1,2 +1,6 @@
 [functions.chizhik-product]
 verify_jwt = false
+
+[functions.push-notifications]
+# ES256 user JWTs are verified with auth.getUser; scheduled dispatch uses its own server-only random token.
+verify_jwt = false
