@@ -2,7 +2,7 @@ export function localDate(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-// Calendar arithmetic: months/years end on the last valid day when necessary.
+// Date of manufacture is day one: calculate the calendar boundary, then subtract one day.
 export function calculateExpiry(manufactured, amount, unit) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(manufactured)) return '';
   const [year, month, day] = manufactured.split('-').map(Number);
@@ -19,6 +19,8 @@ export function calculateExpiry(manufactured, amount, unit) {
     const lastDay = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
     date.setUTCDate(Math.min(day, lastDay));
   }
+  if (!Number.isFinite(date.getTime())) return '';
+  date.setUTCDate(date.getUTCDate()-1);
   if (!Number.isFinite(date.getTime()) || date.getUTCFullYear() < year || date.getUTCFullYear() > 9999) return '';
   return date.toISOString().slice(0, 10);
 }
