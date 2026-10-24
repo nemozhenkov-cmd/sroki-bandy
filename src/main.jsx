@@ -5,6 +5,7 @@ import {BarcodeFormat, DecodeHintType} from '@zxing/library';
 import {createClient} from '@supabase/supabase-js';
 import {Camera, Search, Plus, PackageCheck, AlertTriangle, Clock3, LogOut, History, BarChart3, UserRound, X, Check, Trash2, RefreshCw} from 'lucide-react';
 import './styles.css';
+import {daysLeft, statusFor} from './expiry-status.mjs';
 import ExpiryCalculator from './ExpiryCalculator.jsx';
 import {withDeadline, queryWithDeadline} from './request-timeout.mjs';
 
@@ -12,9 +13,7 @@ const supabaseUrl=import.meta.env.VITE_SUPABASE_URL, supabaseKey=import.meta.env
 const supabase=supabaseUrl&&supabaseKey?createClient(supabaseUrl,supabaseKey):null;
 const STORES=[{id:'163',name:'Видова 163В'},{id:'190',name:'Видова 190А'}];
 const fmt=d=>d?new Intl.DateTimeFormat('ru-RU').format(new Date(d+'T00:00:00')):'';
-function daysLeft(date){const a=new Date();a.setHours(0,0,0,0);const b=new Date(date+'T00:00:00');return Math.ceil((b-a)/86400000)}
-function statusFor(date){const d=daysLeft(date);return d<0?'expired':d<=3?'soon':'ok'}
-function statusText(date){const d=daysLeft(date);return d<0?`Просрочен на ${Math.abs(d)} ${plural(Math.abs(d),['день','дня','дней'])}`:`Осталось ${d} ${plural(d,['день','дня','дней'])}`}
+function statusText(date){const d=daysLeft(date);return d===0?'Истекает сегодня':d<0?`Просрочен на ${Math.abs(d)} ${plural(Math.abs(d),['день','дня','дней'])}`:`Осталось ${d} ${plural(d,['день','дня','дней'])}`}
 function plural(n,a){n=Math.abs(n)%100;let n1=n%10;return n>10&&n<20?a[2]:n1>1&&n1<5?a[1]:n1===1?a[0]:a[2]}
 function localDate(){return new Date().toISOString().slice(0,10)}
 
@@ -240,7 +239,7 @@ const visibleStores=user?.role==='admin'
     ?stores.filter(s=>s.id===user.store_id && s.is_active)
     :[];
  const filtered=items.filter(x=>store==='all'||x.store_id===store).filter(x=>{const st=statusFor(x.expiry_date);return filter==='all'||st===filter}).filter(x=>{const s=(x.products?.name+' '+(x.products?.brand||'')+' '+x.products?.barcode).toLowerCase();return s.includes(q.toLowerCase())});
- const counts={expired:items.filter(x=>statusFor(x.expiry_date)==='expired'&&(store==='all'||x.store_id===store)).length,soon:items.filter(x=>statusFor(x.expiry_date)==='soon'&&(store==='all'||x.store_id===store)).length,ok:items.filter(x=>statusFor(x.expiry_date)==='ok'&&(store==='all'||x.store_id===store)).length};
+ const counts={today:items.filter(x=>statusFor(x.expiry_date)==='today'&&(store==='all'||x.store_id===store)).length,expired:items.filter(x=>statusFor(x.expiry_date)==='expired'&&(store==='all'||x.store_id===store)).length,soon:items.filter(x=>statusFor(x.expiry_date)==='soon'&&(store==='all'||x.store_id===store)).length,ok:items.filter(x=>statusFor(x.expiry_date)==='ok'&&(store==='all'||x.store_id===store)).length};
 
  return (
   <div className={`app ${tab === 'add' ? 'adding-product' : ''}`}>
@@ -266,7 +265,7 @@ const visibleStores=user?.role==='admin'
   >
     🟡 РЕКОМЕНДУЕМ ПРОВЕРИТЬ
   </button>
-)}<div className="stats"><Stat n={counts.expired} t="Просрочено" c="expired" on={()=>setFilter('expired')}/><Stat n={counts.soon} t="Скоро истекает" c="soon" on={()=>setFilter('soon')}/><Stat n={counts.ok} t="В порядке" c="ok" on={()=>setFilter('ok')}/></div><div className="search"><Search size={20}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Поиск товара или штрихкода"/>{q&&<X onClick={()=>setQ('')}/>}</div><div className="list-head"><b>{filter==='all'?'Все товары':filter==='expired'?'Просрочено':filter==='soon'?'Скоро истекает':'В порядке'}</b><button onClick={()=>setFilter('all')}>Сбросить</button></div><div className="list">{filtered.length?filtered.map(x=><Item key={x.id} x={x} onClick={()=>setEdit(x)}/>):<Empty/>}</div></>}
+)}<div className="stats"><Stat n={counts.expired} t="Просрочено" c="expired" on={()=>setFilter('expired')}/><Stat n={counts.today} t="Истекает сегодня" c="today" on={()=>setFilter('today')}/><Stat n={counts.soon} t="Скоро истекает" c="soon" on={()=>setFilter('soon')}/><Stat n={counts.ok} t="В порядке" c="ok" on={()=>setFilter('ok')}/></div><div className="search"><Search size={20}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Поиск товара или штрихкода"/>{q&&<X onClick={()=>setQ('')}/>}</div><div className="list-head"><b>{filter==='all'?'Все товары':filter==='expired'?'Просрочено':filter==='today'?'Истекает сегодня':filter==='soon'?'Скоро истекает':'В порядке'}</b><button onClick={()=>setFilter('all')}>Сбросить</button></div><div className="list">{filtered.length?filtered.map(x=><Item key={x.id} x={x} onClick={()=>setEdit(x)}/>):<Empty/>}</div></>}
  {tab==='add'&&<Add stores={visibleStores} products={products} user={user} onClose={()=>setTab('home')} onSaved={()=>{loadData(user.id);setTab('home')}}/>}
 {tab==='recommendations'&&(
   <section className="recommendations">
@@ -1625,8 +1624,13 @@ function Stats({items,stores,user}){
         </div>
 
         <div>
+          <b>{filtered.filter(x=>statusFor(x.expiry_date)==='today').length}</b>
+          <span>Истекает сегодня</span>
+        </div>
+
+        <div>
           <b>{filtered.filter(x=>statusFor(x.expiry_date)==='soon').length}</b>
-          <span>≤ 3 дней</span>
+          <span>От 1 до 3 дней</span>
         </div>
 
         <div>
