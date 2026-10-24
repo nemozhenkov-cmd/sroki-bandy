@@ -7,6 +7,8 @@ import {Camera, Search, Plus, PackageCheck, AlertTriangle, Clock3, LogOut, Histo
 import './styles.css';
 import {daysLeft, statusFor} from './expiry-status.mjs';
 import ExpiryCalculator from './ExpiryCalculator.jsx';
+import PushSettings from './PushSettings.jsx';
+import {disablePush} from './push-client.mjs';
 import {withDeadline, queryWithDeadline} from './request-timeout.mjs';
 
 const supabaseUrl=import.meta.env.VITE_SUPABASE_URL, supabaseKey=import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -331,7 +333,7 @@ const visibleStores=user?.role==='admin'
     session={session}
     stores={stores}
     onStoresChanged={()=>loadData(user.id)}
-    onLogout={()=>supabase.auth.signOut()}
+    onLogout={async()=>{await disablePush(supabase);await supabase.auth.signOut();}}
   />
 )}<nav><button className={tab==='home'?'sel':''} onClick={()=>setTab('home')}><PackageCheck/>Список</button><button className={tab==='stats'?'sel':''} onClick={()=>setTab('stats')}><BarChart3/>Статистика</button><button className="add" onClick={()=>setTab('add')}><Plus/></button><button className={tab==='history'?'sel':''} onClick={()=>setTab('history')}><History/>История</button><button className={tab==='profile'?'sel':''} onClick={()=>setTab('profile')}><UserRound/>Профиль</button></nav>{edit&&<Edit x={edit} stores={visibleStores} onClose={()=>setEdit(null)} onSaved={()=>{loadData(user.id);setEdit(null)}}/>}
 {error&&<div className="toast">{error}<X onClick={()=>setError('')}/></div>}
@@ -2232,6 +2234,7 @@ const {error}=await supabase
   return (
     <section className="page">
       <h2>Профиль</h2>
+      <PushSettings supabase={supabase} userId={session.user.id}/>
 
       <div className="profile">
         <UserRound size={42}/>
@@ -2375,9 +2378,10 @@ const {error}=await supabase
   />
 )}
 
+      {msg && user.role!=='admin' && <p className="msg" role="status">{msg}</p>}
       <button
         className="secondary"
-        onClick={onLogout}
+        onClick={async()=>{try{await onLogout();}catch{setMsg('Не удалось отключить уведомления перед выходом. Проверьте соединение и повторите.');}}}
       >
         <LogOut/>
         ВЫЙТИ

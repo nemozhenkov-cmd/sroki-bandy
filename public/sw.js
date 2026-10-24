@@ -2,7 +2,7 @@
 const BASE = '/sroki-bandy/';
 const VERSION = new URL(self.location.href).searchParams.get('v') || 'legacy';
 // Change this marker when publishing a recovery so existing installations detect it.
-const RELEASE = 'disposal-status-clarity-1';
+const RELEASE = 'pwa-push-notifications-1';
 const CACHE = `sroki-bandy-${RELEASE}-${VERSION}`;
 
 self.addEventListener('install', event => {
@@ -70,4 +70,26 @@ self.addEventListener('fetch', event => {
       }
     })
   );
+});
+
+// Always show a visible notification, including when the application is closed.
+self.addEventListener('push', event => {
+  let payload = {};
+  try { payload = event.data?.json() || {}; } catch { /* Fall back to a generic visible notice. */ }
+  event.waitUntil(self.registration.showNotification(
+    typeof payload.title === 'string' ? payload.title.slice(0,100) : 'Сроки годности',
+    {body:typeof payload.body === 'string' ? payload.body.slice(0,500) : 'Проверьте товары в приложении.',
+     tag:typeof payload.tag === 'string' ? payload.tag.slice(0,100) : 'expiry-summary',
+     icon:BASE+'icon.svg',data:{url:BASE}}
+  ));
+});
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil((async()=>{
+    const url = new URL(BASE,self.location.origin).href;
+    const windows = await self.clients.matchAll({type:'window',includeUncontrolled:true});
+    const existing = windows.find(client=>client.url.startsWith(url));
+    if(existing) return existing.focus();
+    return self.clients.openWindow(url);
+  })());
 });

@@ -410,3 +410,7 @@
 .dot.expired{background:#b42318}
 .item.expired{background:#fff1f1}
 .expired-badge{display:inline-block;margin:0 0 8px;padding:4px 7px;border-radius:6px;background:#b42318;color:#fff;font-size:10px;font-weight:900;letter-spacing:.4px}
+
+.push-settings{margin:16px 0;padding:16px;border:1px solid #dedede;border-radius:16px;background:#fff}
+.push-settings h3{margin-top:0}.push-settings p{font-size:14px;line-height:1.45;color:#4b5563}
+.push-actions{display:flex;gap:10px;flex-wrap:wrap}.push-actions button{min-height:44px;white-space:normal}
