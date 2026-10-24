@@ -1,10 +1,10 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
+import {BrowserMultiFormatReader} from '@zxing/browser';
+import {BarcodeFormat, DecodeHintType} from '@zxing/library';
 import {createClient} from '@supabase/supabase-js';
 import {Camera, Search, Plus, PackageCheck, AlertTriangle, Clock3, LogOut, History, BarChart3, UserRound, X, Check, Trash2, RefreshCw} from 'lucide-react';
 import './styles.css';
-import {localDate, calculateExpiry} from './expiry-date.mjs';
-import {createRefreshQueue} from './refresh-queue.mjs';
 
 const supabaseUrl=import.meta.env.VITE_SUPABASE_URL, supabaseKey=import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase=supabaseUrl&&supabaseKey?createClient(supabaseUrl,supabaseKey):null;
@@ -14,14 +14,7 @@ function daysLeft(date){const a=new Date();a.setHours(0,0,0,0);const b=new Date(
 function statusFor(date){const d=daysLeft(date);return d<0?'expired':d<=3?'soon':'ok'}
 function statusText(date){const d=daysLeft(date);return d<0?`Просрочен на ${Math.abs(d)} ${plural(Math.abs(d),['день','дня','дней'])}`:`Осталось ${d} ${plural(d,['день','дня','дней'])}`}
 function plural(n,a){n=Math.abs(n)%100;let n1=n%10;return n>10&&n<20?a[2]:n1>1&&n1<5?a[1]:n1===1?a[0]:a[2]}
-async function withTimeout(promise, ms, message='Сервер не ответил вовремя. Проверьте соединение и повторите попытку.') {
-  let timer;
-  try {
-    return await Promise.race([promise, new Promise((_, reject)=>{
-      timer=setTimeout(()=>reject(new Error(message)),ms);
-    })]);
-  } finally { clearTimeout(timer); }
-}
+function localDate(){return new Date().toISOString().slice(0,10)}
 
 function App(){
  const [session,setSession]=useState(null),[loading,setLoading]=useState(true),[tab,setTab]=useState('home'),[store,setStore]=useState('all'),[q,setQ]=useState(''),[filter,setFilter]=useState('all'),[items,setItems]=useState([]),[products,setProducts]=useState([]),[stores,setStores]=useState(STORES),[user,setUser]=useState(null),[edit,setEdit]=useState(null),[scanner,setScanner]=useState(false),[error,setError]=useState('');
@@ -31,13 +24,6 @@ const [recoveryMode,setRecoveryMode]=useState(
 );
 const [confirmationMessage,setConfirmationMessage]=useState(false);
 const [recommendations,setRecommendations]=useState([]);
-const activeUid=useRef(null);
-const refreshQueue=useRef(null);
-const activityAt=useRef(0);
-const loadData=(uid)=>{
-  if(!refreshQueue.current) refreshQueue.current=createRefreshQueue(fetchData);
-  return refreshQueue.current(uid);
-};
 
 
 const load=async()=>{
@@ -46,6 +32,13 @@ const load=async()=>{
     return;
   }
 
+  const withTimeout=(promise,ms)=>Promise.race([
+    promise,
+    new Promise((_,reject)=>setTimeout(
+      ()=>reject(new Error('Сервер не ответил вовремя. Проверьте соединение и повторите попытку.')),
+      ms
+    ))
+  ]);
 
   try{
     setError('');
@@ -57,7 +50,6 @@ const load=async()=>{
 
     if(sessionError) throw sessionError;
 
-    activeUid.current=session?.user.id||null;
     setSession(session);
 
     if(session){
@@ -73,16 +65,20 @@ const load=async()=>{
 
 
 
-const fetchData=async(uid)=>{
-  if(activeUid.current!==uid)return;
-  const queryTimeout=async(label,query)=>{
-    const controller=new AbortController();
-    try {
-      const result=await withTimeout(query.abortSignal(controller.signal),12000,label+': превышено время ожидания 12 секунд');
-      if(result.error)throw new Error(label+': '+result.error.message);
+const loadData=async(uid)=>{
+  const queryTimeout=(label,query)=>Promise.race([
+    Promise.resolve(query).then(result=>{
+      console.log('[Контроль СГ] Загружено:',label);
+      if(result.error){
+        throw new Error(label+': '+result.error.message);
+      }
       return result;
-    } finally { controller.abort(); }
-  };
+    }),
+    new Promise((_,reject)=>setTimeout(
+      ()=>reject(new Error(label+': превышено время ожидания 12 секунд')),
+      12000
+    ))
+  ]);
 
   try{
     console.log('[Контроль СГ] Начало загрузки данных');
@@ -115,8 +111,6 @@ const fetchData=async(uid)=>{
       )
     ]);
 
-    if(activeUid.current!==uid)return;
-    setError('');
     setItems(it||[]);
     setProducts(p||[]);
     setUser(u);
@@ -124,7 +118,6 @@ const fetchData=async(uid)=>{
     if(u && (u.role==='manager'||u.role==='srtz_rtz')){
       supabase.rpc('get_store_recommendations')
         .then(({data,error})=>{
-          if(activeUid.current!==uid)return;
           if(error){
             console.error('[Контроль СГ] Рекомендации:',error);
             setRecommendations([]);
@@ -141,8 +134,7 @@ const fetchData=async(uid)=>{
       setStore(u.store_id);
     }
 
-    if(u && Date.now()-activityAt.current>60000){
-      activityAt.current=Date.now();
+    if(u){
       supabase.rpc('touch_user_activity')
         .then(({error})=>{
           if(error) console.error('[Контроль СГ] Активность:',error);
@@ -155,7 +147,7 @@ const fetchData=async(uid)=>{
     console.log('[Контроль СГ] Все основные данные загружены');
   }catch(err){
     console.error('[Контроль СГ] Ошибка загрузки:',err);
-    if(activeUid.current===uid)setError(err?.message||'Не удалось загрузить данные.');
+    setError(err?.message||'Не удалось загрузить данные.');
   }
 };
 
@@ -166,9 +158,6 @@ useEffect(()=>{
     return;
   }
 
-  let authTimer;
-  let refreshTimer;
-  let disposed=false;
   load();
 
   const {data:{subscription}}=supabase.auth.onAuthStateChange(
@@ -193,24 +182,12 @@ useEffect(()=>{
         setRecoveryMode(true);
       }
 
-      const previousUid=activeUid.current;
-      activeUid.current=newSession?.user.id||null;
       setSession(newSession);
-      if(!newSession){
-        clearTimeout(authTimer);
-        setUser(null);setItems([]);setProducts([]);setRecommendations([]);
-        activityAt.current=0;
-      }
 
       // Первичную загрузку выполняет load().
       // Остальные события авторизации обрабатываем здесь.
-      if(newSession && (_event==='USER_UPDATED' ||
-          (_event!=='INITIAL_SESSION' && previousUid!==newSession.user.id))){
-        clearTimeout(authTimer);
-        // Leave the auth callback before issuing requests with this client.
-        authTimer=setTimeout(()=>{
-          if(!disposed && activeUid.current===newSession.user.id)loadData(newSession.user.id);
-        },0);
+      if(_event!=='INITIAL_SESSION'&&newSession){
+        loadData(newSession.user.id);
       }
     }
   );
@@ -224,20 +201,18 @@ useEffect(()=>{
         schema:'public',
         table:'expiry_items'
       },
-      ()=>{
-        clearTimeout(refreshTimer);
-        refreshTimer=setTimeout(()=>{
-          if(!disposed && activeUid.current)loadData(activeUid.current);
-        },250);
+      async ()=>{
+        const {data:{session:currentSession}}=
+          await supabase.auth.getSession();
+
+        if(currentSession){
+          loadData(currentSession.user.id);
+        }
       }
     )
     .subscribe();
 
   return()=>{
-    disposed=true;
-    activeUid.current=null;
-    clearTimeout(authTimer);
-    clearTimeout(refreshTimer);
     subscription.unsubscribe();
     supabase.removeChannel(ch);
   };
@@ -802,29 +777,20 @@ function Add({stores,products,user,onClose,onSaved}){
  [name,setName]=useState(''),
  [brand,setBrand]=useState(''),
  [expiry,setExpiry]=useState(localDate()),
- [dateMode,setDateMode]=useState('manual'),
- [manufactured,setManufactured]=useState(localDate()),
- [shelfLife,setShelfLife]=useState(''),
- [shelfUnit,setShelfUnit]=useState('days'),
  [qty,setQty]=useState(1),
  [store,setStore]=useState(user.store_id),
  [note,setNote]=useState(''),
  [busy,setBusy]=useState(false),
- [lookupBusy,setLookupBusy]=useState(false),
  [msg,setMsg]=useState(''),
  [duplicate,setDuplicate]=useState(null),
  [scanning,setScanning]=useState(false),
  videoRef=useRef(null),
- scannerRef=useRef(null),
- lookupRef=useRef(null),
- lookupVersion=useRef(0);
+ scannerRef=useRef(null);
 
  useEffect(
-  ()=>()=>{lookupVersion.current++;lookupRef.current?.abort();scannerRef.current?.stop?.();scannerRef.current?.reset?.();scannerRef.current=null},
+  ()=>()=>{scannerRef.current?.stop?.();scannerRef.current?.reset?.();scannerRef.current=null},
   []
  );
-
- const calculatedExpiry=calculateExpiry(manufactured,shelfLife,shelfUnit);
 
  const months=[
   'Январь',
@@ -888,9 +854,6 @@ function Add({stores,products,user,onClose,onSaved}){
     try{scannerRef.current?.reset?.()}catch{}
     scannerRef.current=null;
 
-    const [{BrowserMultiFormatReader},{BarcodeFormat,DecodeHintType}]=await Promise.all([
-      import('@zxing/browser'),import('@zxing/library')
-    ]);
     const hints=new Map();
 
     hints.set(
@@ -1070,38 +1033,54 @@ function Add({stores,products,user,onClose,onSaved}){
 };
  const find=async(rawCode)=>{
   const code=String(rawCode||'').replace(/\D/g,'');
-  const version=++lookupVersion.current;
-  lookupRef.current?.abort();
   setBarcode(code);
-  if(!code){setLookupBusy(false);setMsg('Введите штрихкод.');return;}
   setMsg('Ищем товар…');
-  const own=products.find(p=>String(p.barcode||'').replace(/\D/g,'')===code);
+
+  const own=products.find(
+   p=>String(p.barcode||'').replace(/\D/g,'')===code
+  );
+
   if(own){
-    setName(own.name||'');setBrand(own.brand||'');
-    setLookupBusy(false);setMsg('Товар найден в нашей базе');return;
+   setName(own.name||'');
+   setBrand(own.brand||'');
+   setMsg('Товар найден в нашей базе');
+   return;
   }
-  const controller=new AbortController();
-  lookupRef.current=controller;
-  const timer=setTimeout(()=>controller.abort(),10000);
-  setLookupBusy(true);
+
+  setBusy(true);
+
   try{
-    const r=await fetch(
-      `https://world.openfoodfacts.org/api/v3/product/${encodeURIComponent(code)}?fields=code,product_name,brands`,
-      {headers:{Accept:'application/json'},signal:controller.signal}
-    );
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    const j=await r.json();
-    if(version!==lookupVersion.current)return;
-    const productName=j?.product?.product_name?.trim()||'';
-    setName(productName);setBrand(j?.product?.brands?.trim()||'');
-    setMsg(productName?'Товар найден в Open Food Facts':'Товар не найден — введите название вручную');
+   const r=await fetch(
+    `https://world.openfoodfacts.org/api/v3/product/${encodeURIComponent(code)}?fields=code,product_name,brands`,
+    {
+     headers:{
+      Accept:'application/json'
+     }
+    }
+   );
+
+   const j=await r.json();
+   const product=j?.product;
+   const productName=product?.product_name||'';
+   const brand=product?.brands||'';
+
+   if(productName.trim()){
+    setName(productName.trim());
+    setBrand(brand.trim());
+    setMsg('Товар найден в Open Food Facts');
+   }else{
+    setName('');
+    setBrand('');
+    setMsg('Товар не найден — введите название вручную');
+   }
+
   }catch(error){
-    if(version!==lookupVersion.current)return;
-    setName('');setBrand('');
-    setMsg('Не удалось выполнить поиск — введите название вручную');
+   console.error('Open Food Facts error:',error);
+   setName('');
+   setBrand('');
+   setMsg('Не удалось выполнить поиск — введите название вручную');
   }finally{
-    clearTimeout(timer);
-    if(version===lookupVersion.current){lookupRef.current=null;setLookupBusy(false);}
+   setBusy(false);
   }
  };
 
@@ -1364,7 +1343,7 @@ const finishDuplicate=async(action)=>{
 
    <input
     value={barcode}
-    onChange={e=>{lookupVersion.current++;lookupRef.current?.abort();setLookupBusy(false);setBarcode(e.target.value)}}
+    onChange={e=>setBarcode(e.target.value)}
     onBlur={()=>barcode&&find(barcode)}
     placeholder="Штрихкод EAN"
     inputMode="numeric"
@@ -1382,37 +1361,9 @@ const finishDuplicate=async(action)=>{
     placeholder="Бренд (необязательно)"
    />
 
-   <div>
-    <b>Срок годности</b>
-    <div className="expiry-mode" role="group" aria-label="Способ ввода срока годности">
-      <button type="button" aria-pressed={dateMode==='manual'} onClick={()=>setDateMode('manual')}>Вручную</button>
-      <button type="button" aria-pressed={dateMode==='calculator'} onClick={()=>setDateMode('calculator')}>Калькулятор</button>
-    </div>
-    </div>
-    {dateMode==='calculator'&&(
-      <div className="expiry-calculator">
-        <label>Дата изготовления
-          <input type="date" value={manufactured} onChange={e=>setManufactured(e.target.value)}/>
-        </label>
-        <div className="expiry-duration">
-          <label>Срок годности
-            <input type="number" min="1" step="1" inputMode="numeric" value={shelfLife} onChange={e=>setShelfLife(e.target.value)} placeholder="Например, 30"/>
-          </label>
-          <label>Единица
-            <select value={shelfUnit} onChange={e=>setShelfUnit(e.target.value)}>
-              <option value="days">Дней</option><option value="months">Месяцев</option><option value="years">Лет</option>
-            </select>
-          </label>
-        </div>
-        <p role="status">{calculatedExpiry?`Дата окончания: ${fmt(calculatedExpiry)}`:'Укажите дату изготовления и целый положительный срок.'}</p>
-        <button type="button" className="primary" disabled={!calculatedExpiry} onClick={()=>{
-          setExpiry(calculatedExpiry);setDateMode('manual');
-        }}>ПОДСТАВИТЬ ДАТУ</button>
-        <small>Дата изготовления + указанный срок. Проверьте результат по маркировке товара.</small>
-      </div>
-    )}
    <label>
-    Дата окончания срока годности
+    Срок годности
+
     <div
      style={{
       display:'grid',
@@ -1469,10 +1420,10 @@ const finishDuplicate=async(action)=>{
        e.target.value
       )}
      >
-      {[...new Set([Number(expiryYear),...Array.from(
+      {Array.from(
        {length:6},
        (_,i)=>new Date().getFullYear()+i
-      )])].sort((a,b)=>a-b).map(year=>(
+      ).map(year=>(
        <option
         key={year}
         value={year}
@@ -1520,7 +1471,7 @@ const finishDuplicate=async(action)=>{
 
    <button
     className="primary"
-    disabled={busy||lookupBusy}
+    disabled={busy}
     onClick={save}
    >
     {busy?'СОХРАНЕНИЕ…':'СОХРАНИТЬ'}
