@@ -5,6 +5,7 @@ import {BarcodeFormat, DecodeHintType} from '@zxing/library';
 import {createClient} from '@supabase/supabase-js';
 import {Camera, Search, Plus, PackageCheck, AlertTriangle, Clock3, LogOut, History, BarChart3, UserRound, X, Check, Trash2, RefreshCw} from 'lucide-react';
 import './styles.css';
+import {withDeadline, queryWithDeadline} from './request-timeout.mjs';
 
 const supabaseUrl=import.meta.env.VITE_SUPABASE_URL, supabaseKey=import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase=supabaseUrl&&supabaseKey?createClient(supabaseUrl,supabaseKey):null;
@@ -32,20 +33,13 @@ const load=async()=>{
     return;
   }
 
-  const withTimeout=(promise,ms)=>Promise.race([
-    promise,
-    new Promise((_,reject)=>setTimeout(
-      ()=>reject(new Error('Сервер не ответил вовремя. Проверьте соединение и повторите попытку.')),
-      ms
-    ))
-  ]);
 
   try{
     setError('');
 
-    const {data:{session},error:sessionError}=await withTimeout(
+    const {data:{session},error:sessionError}=await withDeadline(
       supabase.auth.getSession(),
-      15000
+      30000
     );
 
     if(sessionError) throw sessionError;
@@ -53,7 +47,7 @@ const load=async()=>{
     setSession(session);
 
     if(session){
-      await withTimeout(loadData(session.user.id),20000);
+      await loadData(session.user.id);
     }
   }catch(err){
     console.error('Ошибка загрузки приложения:',err);
@@ -66,19 +60,7 @@ const load=async()=>{
 
 
 const loadData=async(uid)=>{
-  const queryTimeout=(label,query)=>Promise.race([
-    Promise.resolve(query).then(result=>{
-      console.log('[Контроль СГ] Загружено:',label);
-      if(result.error){
-        throw new Error(label+': '+result.error.message);
-      }
-      return result;
-    }),
-    new Promise((_,reject)=>setTimeout(
-      ()=>reject(new Error(label+': превышено время ожидания 12 секунд')),
-      12000
-    ))
-  ]);
+  const queryTimeout=(label,query)=>queryWithDeadline(label,query);
 
   try{
     console.log('[Контроль СГ] Начало загрузки данных');
