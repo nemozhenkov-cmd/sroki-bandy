@@ -1418,7 +1418,15 @@ svg {
 .home-screen .wordmark { font-size:29px; }
 .home-screen .home-hero { min-height:96px; margin-bottom:9px; }
 .home-screen .home-hero h1 { font-size:26px; line-height:1.04; margin-bottom:9px; }
-.home-screen .hero-mascot { width:85px; flex-basis:85px; margin-right:0; }
+/* Scale visually into the free header space; the flex slot and lower edge stay fixed. */
+.home-screen .hero-mascot {
+  width:85px;
+  flex-basis:85px;
+  margin-right:0;
+  transform:scale(1.32);
+  transform-origin:bottom right;
+  pointer-events:none;
+}
 .home-screen .store-picker,.home-screen .store-picker select { height:34px; }
 .home-screen .store-picker { border-radius:11px; }
 .home-screen .store-picker select { font-size:12px; }
@@ -1435,4 +1443,8 @@ svg {
   .home-screen .home-hero { min-height:110px; }
   .home-screen .home-hero h1 { font-size:32px; }
   .home-screen .hero-mascot { width:105px; flex-basis:105px; }
+}
+
+@media(max-width:359px){
+  .home-screen .hero-mascot { transform:scale(1.18); }
 }
