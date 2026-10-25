@@ -3,8 +3,9 @@ import {createRoot} from 'react-dom/client';
 import {BrowserMultiFormatReader} from '@zxing/browser';
 import {BarcodeFormat, DecodeHintType} from '@zxing/library';
 import {createClient} from '@supabase/supabase-js';
-import {Camera, Search, Plus, PackageCheck, AlertTriangle, Clock3, LogOut, History, BarChart3, UserRound, X, Check, Trash2, RefreshCw} from 'lucide-react';
+import {Camera, Search, Plus, PackageCheck, AlertTriangle, Clock3, LogOut, History, BarChart3, UserRound, X, Check, Trash2, RefreshCw, MapPin, ChevronDown, ChevronRight, List} from 'lucide-react';
 import './styles.css';
+import {Wordmark,Mascot,LoadingScreen,UpdateScreen,DateFields} from './Brand.jsx';
 import {daysLeft, statusFor} from './expiry-status.mjs';
 import ExpiryCalculator from './ExpiryCalculator.jsx';
 import PushSettings from './PushSettings.jsx';
@@ -221,7 +222,7 @@ if(error && session && !user)return (
 
 if(confirmationMessage)return (
   <div className="auth">
-    <div className="logo">Чижик</div>
+    <Wordmark/>
     <h1>Почта подтверждена</h1>
     <p>Почта подтверждена, вернитесь в приложение для продолжения.</p>
     <button className="primary" onClick={()=>setConfirmationMessage(false)}>
@@ -244,30 +245,16 @@ const visibleStores=user?.role==='admin'
  const counts={today:items.filter(x=>statusFor(x.expiry_date)==='today'&&(store==='all'||x.store_id===store)).length,expired:items.filter(x=>statusFor(x.expiry_date)==='expired'&&(store==='all'||x.store_id===store)).length,soon:items.filter(x=>statusFor(x.expiry_date)==='soon'&&(store==='all'||x.store_id===store)).length,ok:items.filter(x=>statusFor(x.expiry_date)==='ok'&&(store==='all'||x.store_id===store)).length};
 
  return (
-  <div className={`app ${tab === 'add' ? 'adding-product' : ''}`}>
-<header><div className="brand">Контроль Сроков Годности<span>Выберите ваш магазин для отображения данных</span></div><button className="icon" onClick={()=>setTab('profile')}><UserRound/></button></header>
- {tab==='home'&&<><div className="store-tabs">{[
-  ...(user.role==='admin' ? [['all','ВСЕ']] : []),
-  ...visibleStores.map(s=>[s.id,s.name.toUpperCase(),s.is_active])
-].map(([id,n,isActive])=>(
-  <button
-    className={store===id?'active':''}
-    onClick={()=>setStore(id)}
-    key={id}
-  >
-    {n}
-    {user.role==='admin' && id!=='all' && !isActive && (
-      <span style={{color:'#e53935',marginLeft:6}}>●</span>
-    )}
-  </button>
-))}</div>{(user.role==='manager'||user.role==='srtz_rtz')&&recommendations.length>0&&(
+  <div className={`app ${tab === 'add' ? 'adding-product' : tab === 'home' ? 'home-screen' : ''}`}>
+<header className="app-header"><Wordmark/></header>
+ {tab==='home'&&<><section className="home-hero"><div className="hero-copy"><h1>Сроки<br/>под контролем</h1><div className="store-picker"><MapPin size={18}/><select aria-label="Магазин" value={store} onChange={e=>setStore(e.target.value)}>{user.role==='admin'&&<option value="all">Все магазины</option>}{visibleStores.map(s=><option key={s.id} value={s.id}>{s.name}{!s.is_active?' · Неактивен':''}</option>)}</select><ChevronDown size={16}/></div></div><Mascot className="hero-mascot"/></section>{(user.role==='manager'||user.role==='srtz_rtz')&&recommendations.length>0&&(
   <button
     className="recommend-button"
     onClick={()=>setTab('recommendations')}
   >
     🟡 РЕКОМЕНДУЕМ ПРОВЕРИТЬ
   </button>
-)}<div className="stats"><Stat n={counts.expired} t="Просрочено" c="expired" on={()=>setFilter('expired')}/><Stat n={counts.today} t="Списать сегодня" c="today" on={()=>setFilter('today')}/><Stat n={counts.soon} t="Скоро истекает" c="soon" on={()=>setFilter('soon')}/><Stat n={counts.ok} t="В порядке" c="ok" on={()=>setFilter('ok')}/></div><div className="search"><Search size={20}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Поиск товара или штрихкода"/>{q&&<X onClick={()=>setQ('')}/>}</div><div className="list-head"><b>{filter==='all'?'Все товары':filter==='expired'?'Просрочено':filter==='today'?'Списать сегодня':filter==='soon'?'Скоро истекает':'В порядке'}</b><button onClick={()=>setFilter('all')}>Сбросить</button></div><div className="list">{filtered.length?filtered.map(x=><Item key={x.id} x={x} onClick={()=>setEdit(x)}/>):<Empty/>}</div></>}
+)}<div className="stats"><Stat n={counts.expired} t="Просрочено" c="expired" selected={filter==='expired'} on={()=>setFilter('expired')}/><Stat n={counts.today} t="Списать сегодня" c="today" selected={filter==='today'} on={()=>setFilter('today')}/><Stat n={counts.soon} t="Скоро истекает" c="soon" selected={filter==='soon'} on={()=>setFilter('soon')}/><Stat n={counts.ok} t="В порядке" c="ok" selected={filter==='ok'} on={()=>setFilter('ok')}/></div><div className="search"><Search size={20}/><input value={q} onChange={e=>setQ(e.target.value)} aria-label="Поиск товара или штрихкода" placeholder="Название или штрихкод"/>{q&&<button className="search-clear" aria-label="Очистить поиск" onClick={()=>setQ('')}><X size={18}/></button>}</div><div className="list-head"><b>{filter==='all'?'Все товары':filter==='expired'?'Просрочено':filter==='today'?'Списать сегодня':filter==='soon'?'Скоро истекает':'В порядке'}</b><button onClick={()=>setFilter('all')}>Сбросить</button></div><div className="list">{filtered.length?filtered.map(x=><Item key={x.id} x={x} onClick={()=>setEdit(x)}/>):<Empty/>}</div></>}
  {tab==='add'&&<Add stores={visibleStores} products={products} user={user} onClose={()=>setTab('home')} onSaved={()=>{loadData(user.id);setTab('home')}}/>}
 {tab==='recommendations'&&(
   <section className="recommendations">
@@ -335,21 +322,12 @@ const visibleStores=user?.role==='admin'
     onStoresChanged={()=>loadData(user.id)}
     onLogout={async()=>{await disablePush(supabase);await supabase.auth.signOut();}}
   />
-)}<nav><button className={tab==='home'?'sel':''} onClick={()=>setTab('home')}><PackageCheck/>Список</button><button className={tab==='stats'?'sel':''} onClick={()=>setTab('stats')}><BarChart3/>Статистика</button><button className="add" onClick={()=>setTab('add')}><Plus/></button><button className={tab==='history'?'sel':''} onClick={()=>setTab('history')}><History/>История</button><button className={tab==='profile'?'sel':''} onClick={()=>setTab('profile')}><UserRound/>Профиль</button></nav>{edit&&<Edit x={edit} stores={visibleStores} onClose={()=>setEdit(null)} onSaved={()=>{loadData(user.id);setEdit(null)}}/>}
+)}<nav aria-label="Основная навигация"><button className={tab==='home'?'sel':''} onClick={()=>setTab('home')}><List/>Список</button><button className={tab==='stats'?'sel':''} onClick={()=>setTab('stats')}><BarChart3/>Статистика</button><button className="add" aria-label="Добавить товар" onClick={()=>setTab('add')}><Plus/></button><button className={tab==='history'?'sel':''} onClick={()=>setTab('history')}><History/>История</button><button className={tab==='profile'?'sel':''} onClick={()=>setTab('profile')}><UserRound/>Профиль</button></nav>{edit&&<Edit x={edit} stores={visibleStores} onClose={()=>setEdit(null)} onSaved={()=>{loadData(user.id);setEdit(null)}}/>}
 {error&&<div className="toast">{error}<X onClick={()=>setError('')}/></div>}
 </div>
  );
 }
-function Splash(){
-  return (
-    <div className="splash">
-      <div className="logo">Чижик</div>
-      <h1>Контроль сроков годности</h1>
-      <p>г. Новороссийск</p>
-      <small>Автор: Неможенко В. 2787320</small>
-    </div>
-  );
-}function Setup(){return <div className="center"><h1>КОНТРОЛЬ СГ</h1><p>Добавьте VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY в .env</p></div>}
+function Splash(){return <LoadingScreen/>;}function Setup(){return <div className="center"><h1>КОНТРОЛЬ СГ</h1><p>Добавьте VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY в .env</p></div>}
 function Auth(){
   const [email,setEmail]=useState('');
   const [pass,setPass]=useState('');
@@ -450,14 +428,15 @@ function Auth(){
 
   return (
     <div className="auth">
-      <div className="logo">Чижик</div>
+      <Wordmark/>
 
-      <h1>Контроль сроков годности</h1>
-      <p>г. Новороссийск</p>
+      <Mascot className="auth-mascot"/>
+      <h1>Сроки под контролем</h1>
+      <p>{recover?'Восстановите доступ к аккаунту':reg?'Создайте аккаунт для работы':'Войдите, чтобы начать работу'}</p>
 
       {reg&&!recover&&
         <input
-          placeholder="Фамилия и Имя"
+          aria-label="Фамилия и имя" placeholder="Фамилия и Имя"
           value={name}
           onChange={e=>setName(e.target.value)}
         />
@@ -465,7 +444,7 @@ function Auth(){
 
       <input
         type="email"
-        placeholder="Email"
+        aria-label="Email" autoComplete="email" placeholder="Email"
         value={email}
         onChange={e=>setEmail(e.target.value)}
       />
@@ -473,7 +452,7 @@ function Auth(){
       {!recover&&
         <input
           type="password"
-          placeholder="Пароль"
+          aria-label="Пароль" autoComplete={reg?'new-password':'current-password'} placeholder="Пароль"
           value={pass}
           onChange={e=>setPass(e.target.value)}
         />
@@ -581,7 +560,7 @@ function PasswordRecovery({onDone}){
 
   return (
     <div className="auth">
-      <div className="logo">Чижик</div>
+      <Wordmark/>
       <h1>Новый пароль</h1>
       <p>Придумайте новый пароль для входа.</p>
 
@@ -704,7 +683,7 @@ function Onboard({session,onDone}){
 
   return (
     <div className="auth">
-      <div className="logo">Чижик</div>
+      <Wordmark/>
 
       <h2>Профиль сотрудника</h2>
 
@@ -753,9 +732,21 @@ function Onboard({session,onDone}){
     </div>
   );
 }
-function Stat({n,t,c,on}){return <button className={'stat '+c} onClick={on}><b>{n}</b><span>{t}</span></button>}
-function Item({x,onClick}){const s=statusFor(x.expiry_date);return <button className={'item '+s} onClick={onClick}><div className={'dot '+s}/><div className="itemmain">{s==='expired'&&<span className="expired-badge">ПРОСРОЧЕНО</span>}<h3>{x.products?.name||'Без названия'}</h3><div className="muted">EAN {x.products?.barcode} · {x.stores?.name}</div><strong>Срок: {fmt(x.expiry_date)}</strong><div className="days">{statusText(x.expiry_date)}</div><div className="muted">Количество: {x.quantity} · Добавил: {x.created?.name||'—'}</div></div></button>}
-function Empty(){return <div className="empty"><PackageCheck size={42}/><b>Ничего не найдено</b><span>Попробуйте изменить фильтр или добавить товар.</span></div>}
+const statusLabels={expired:'Просрочено',today:'Списать сегодня',soon:'Скоро истекает',ok:'В порядке'};
+function Stat({n,t,c,on,selected}){return <button className={'stat '+c+(selected?' selected':'')} onClick={on} aria-pressed={selected}><b>{n}</b><span>{t}</span>{selected&&<Check size={12} className="stat-check"/>}</button>;}
+function Item({x,onClick}){
+  const s=statusFor(x.expiry_date);
+  return <button className={'item '+s} onClick={onClick} title={x.products?.name}>
+    <div className="itemmain">
+      <h3>{x.products?.name||'Без названия'}</h3>
+      <div className="item-details">
+        <div><span className={'status-badge '+s}>{s==='expired'?<AlertTriangle size={13}/>:s==='ok'?<Check size={13}/>:<Clock3 size={13}/>} {statusLabels[s]}</span><strong>Годен до <b>{fmt(x.expiry_date)}</b></strong></div>
+        <span className="item-quantity">{x.quantity} <small>шт.</small></span><ChevronRight size={18} className="item-chevron"/>
+      </div>
+    </div>
+  </button>;
+}
+function Empty(){return <div className="empty"><Mascot/><b>Ничего не найдено</b><span>Попробуйте изменить фильтр<br/>или добавить товар.</span></div>;}
 function Add({stores,products,user,onClose,onSaved}){
  const [barcode,setBarcode]=useState(''),
  [name,setName]=useState(''),
@@ -1266,16 +1257,14 @@ const finishDuplicate=async(action)=>{
 
    <div className="sheethead">
     <h2>Добавить товар</h2>
-    <button onClick={onClose}>
+    <button className="close-button" aria-label="Закрыть" onClick={onClose}>
      <X/>
     </button>
    </div>
 
-   {msg&&(
-    <div className="msg top-msg">
-     {msg}
-    </div>
-   )}
+   <div className={'form-notice'+(msg?' has-message':'')} role="status">
+     {msg||'Введите штрихкод или воспользуйтесь камерой.'}
+   </div>
 
    <button
     className="scan"
@@ -1329,26 +1318,26 @@ const finishDuplicate=async(action)=>{
     value={barcode}
     onChange={e=>setBarcode(e.target.value)}
     onBlur={()=>barcode&&find(barcode)}
-    placeholder="Штрихкод EAN"
+    aria-label="Штрихкод EAN" placeholder="Штрихкод EAN"
     inputMode="numeric"
    />
 
    <input
     value={name}
     onChange={e=>setName(e.target.value)}
-    placeholder="Название товара"
+    aria-label="Название товара" placeholder="Название товара"
    />
 
    <input
     value={brand}
     onChange={e=>setBrand(e.target.value)}
-    placeholder="Бренд (необязательно)"
+    aria-label="Бренд" placeholder="Бренд (необязательно)"
    />
 
    <ExpiryCalculator onApply={setExpiry}/>
 
    <label>
-    Срок годности
+    Годен до
 
     <div
      style={{
@@ -1360,7 +1349,7 @@ const finishDuplicate=async(action)=>{
     >
 
      <select
-      value={expiryDay}
+      aria-label="День окончания срока" value={expiryDay}
       onChange={e=>updateExpiry(
        e.target.value,
        expiryMonth,
@@ -1381,7 +1370,7 @@ const finishDuplicate=async(action)=>{
      </select>
 
      <select
-      value={expiryMonth}
+      aria-label="Месяц окончания срока" value={expiryMonth}
       onChange={e=>updateExpiry(
        expiryDay,
        e.target.value,
@@ -1399,7 +1388,7 @@ const finishDuplicate=async(action)=>{
      </select>
 
      <select
-      value={expiryYear}
+      aria-label="Год окончания срока" value={expiryYear}
       onChange={e=>updateExpiry(
        expiryDay,
        expiryMonth,
@@ -1514,7 +1503,7 @@ const finishDuplicate=async(action)=>{
 function Edit({x,stores,onClose,onSaved}){const [expiry,setExpiry]=useState(x.expiry_date),[qty,setQty]=useState(x.quantity),[store,setStore]=useState(x.store_id),[note,setNote]=useState(x.note||''),[busy,setBusy]=useState(false),[msg,setMsg]=useState('');
  const save=async()=>{setBusy(true);const {data:{user}}=await supabase.auth.getUser();const r=await supabase.from('expiry_items').update({expiry_date:expiry,quantity:qty,store_id:store,note,updated_by:user.id}).eq('id',x.id);if(r.error)setMsg(r.error.message);else onSaved();setBusy(false)};
  const dispose=async()=>{setBusy(true);setMsg('');const {data:{user}}=await supabase.auth.getUser();const {error}=await supabase.from('expiry_items').update({is_disposed:true,updated_by:user.id,updated_at:new Date().toISOString()}).eq('id',x.id).eq('is_disposed',false);if(error){setMsg(error.message);setBusy(false);return}onSaved();};
- return <div className="modal"><div className="dialog"><div className="sheethead"><h2>{x.products?.name}</h2><button onClick={onClose}><X/></button></div><div className="muted">EAN {x.products?.barcode}</div><label>Срок<input type="date" value={expiry} onChange={e=>setExpiry(e.target.value)}/></label><label>Количество<input type="number" min="1" value={qty} onChange={e=>setQty(+e.target.value)}/></label><label>Магазин<select value={store} onChange={e=>setStore(e.target.value)}>{stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Комментарий"/><button className="primary" disabled={busy} onClick={save}>{busy?'СОХРАНЕНИЕ…':'СОХРАНИТЬ ИЗМЕНЕНИЯ'}</button><button className="danger" disabled={busy} onClick={dispose}><Trash2/>СПИСАТЬ</button>{msg&&<p className="msg">{msg}</p>}</div></div>}
+ return <div className="modal"><div className="dialog"><div className="sheethead"><h2>{x.products?.name}</h2><button className="close-button" aria-label="Закрыть" onClick={onClose}><X/></button></div><div className="item-info"><b>{statusText(x.expiry_date)}</b><span>EAN {x.products?.barcode}</span><span>Магазин: {x.stores?.name||'—'}</span><span>Добавил: {x.created?.name||'—'}</span></div><DateFields value={expiry} onChange={setExpiry}/><label>Количество<input type="number" min="1" value={qty} onChange={e=>setQty(+e.target.value)}/></label><label>Магазин<select value={store} onChange={e=>setStore(e.target.value)}>{stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Комментарий"/><button className="primary" disabled={busy} onClick={save}>{busy?'СОХРАНЕНИЕ…':'СОХРАНИТЬ ИЗМЕНЕНИЯ'}</button><button className="danger" disabled={busy} onClick={dispose}><Trash2/>СПИСАТЬ</button>{msg&&<p className="msg">{msg}</p>}</div></div>}
 function Stats({items,stores,user}){
   const [store,setStore]=useState(
     user?.role==='admin' ? 'all' : user?.store_id || 'all'
@@ -1721,7 +1710,8 @@ function Stats({items,stores,user}){
 function HistoryView(){
  const [rows,setRows]=useState([]),[loading,setLoading]=useState(true),[msg,setMsg]=useState('');
  useEffect(()=>{(async()=>{const {data,error}=await supabase.from('history').select('*,users(name),expiry_items(products(name),stores(name))').order('created_at',{ascending:false}).limit(100);if(error)setMsg(error.message);else setRows(data||[]);setLoading(false)})()},[]);
- return <section className="page"><h2>История</h2>{loading?<div className="empty"><RefreshCw/><span>Загрузка…</span></div>:msg?<div className="empty"><AlertTriangle/><span>{msg}</span></div>:rows.length?<div className="history-list">{rows.map(r=><div className="history-row" key={r.id}><b>{new Date(r.created_at).toLocaleString('ru-RU')}</b><span>{r.users?.name||'Сотрудник'} · {r.action==='added'?'добавил товар':r.action==='disposed'?'списал товар':'изменил товар'}</span><small>{r.expiry_items?.products?.name||'Товар'} · {r.expiry_items?.stores?.name||'—'}</small></div>)}</div>:<div className="empty"><History size={42}/><b>История пока пуста</b><span>Изменения появятся здесь автоматически.</span></div>}</section>}
+ return <section className="page"><h2>История</h2>{loading?<div className="empty"><RefreshCw/><span>Загрузка…</span></div>:msg?<div className="empty"><AlertTriangle/><span>{msg}</span></div>:rows.length?<div className="history-list">{rows.map(r=><article className={'history-row '+r.action} key={r.id}><div className="history-icon">{r.action==='added'?<Plus size={19}/>:r.action==='disposed'?<Trash2 size={18}/>:<RefreshCw size={18}/>}</div><div className="history-content"><b>{r.action==='added'?'Добавлен товар':r.action==='disposed'?'Списан товар':'Изменён товар'}</b><p>{r.expiry_items?.products?.name||'Товар'}</p><small>{r.users?.name||'Сотрудник'} · {r.expiry_items?.stores?.name||'—'}</small><time>{new Date(r.created_at).toLocaleString('ru-RU')}</time></div></article>)}</div>:<div className="empty"><History size={42}/><b>История пока пуста</b><span>Изменения появятся здесь автоматически.</span></div>}</section>;
+}
 function EmployeeManagement({user,stores,onChanged}){
   const [employees,setEmployees]=useState([]);
   const [loading,setLoading]=useState(true);
@@ -2234,7 +2224,6 @@ const {error}=await supabase
   return (
     <section className="page">
       <h2>Профиль</h2>
-      <PushSettings supabase={supabase} userId={session.user.id}/>
 
       <div className="profile">
         <UserRound size={42}/>
@@ -2263,6 +2252,8 @@ const {error}=await supabase
         <small>{session.user.email}</small>
       </div>
 
+      <PushSettings supabase={supabase} userId={session.user.id}/>
+      <div className="profile-note"><Mascot/><b>Сроки под контролем!</b></div>
       {user.role==='admin' && (
         <>
           <h3 style={{marginTop:24}}>Магазины</h3>
@@ -2498,48 +2489,7 @@ function UpdateManager() {
   };
 
   if (!updateReady) return null;
-
-  return (
-    <div style={{
-      position: 'fixed',
-      inset: 0,
-      zIndex: 99999,
-      background: '#fff',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 24,
-      textAlign: 'center'
-    }}>
-      <div style={{ width: '100%', maxWidth: 360 }}>
-        <h2 style={{ marginBottom: 12 }}>Доступно обновление</h2>
-        <p style={{ marginBottom: 24 }}>
-          Чтобы продолжить работу, обновите приложение до актуальной версии.
-        </p>
-        {updateError && (
-          <p style={{ color: '#c62828', marginBottom: 16 }}>
-            {updateError}
-          </p>
-        )}
-        <button
-          onClick={applyUpdate}
-          style={{
-            width: '100%',
-            minHeight: 48,
-            border: 0,
-            borderRadius: 10,
-            background: '#f7c600',
-            color: '#111',
-            fontWeight: 700,
-            fontSize: 16,
-            cursor: 'pointer'
-          }}
-        >
-          ОБНОВИТЬ
-        </button>
-      </div>
-    </div>
-  );
+  return <UpdateScreen onApply={applyUpdate} error={updateError}/>;
 }
 
 createRoot(document.getElementById('root')).render(
