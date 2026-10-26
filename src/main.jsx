@@ -32,7 +32,7 @@ const [recoveryMode,setRecoveryMode]=useState(
 const [confirmationMessage,setConfirmationMessage]=useState(false);
 const [recommendations,setRecommendations]=useState([]);
 const [online,setOnline]=useState(navigator.onLine),[storageError,setStorageError]=useState(''),[cachedOnly,setCachedOnly]=useState(false);
-const accountRef=useRef(null);
+const accountRef=useRef(null),sessionRef=useRef(null),dataLoadsRef=useRef(new Map());
 const restore=async(uid,activate=false)=>{
  const state=await readOffline(uid);
  if(!state?.snapshot?.user||(!activate&&accountRef.current!==uid)||(activate&&accountRef.current&&accountRef.current!==uid))return false;
@@ -67,6 +67,12 @@ const load=async()=>{
 
   try{
     setError('');
+    const cachedOwner=rememberedOwner();
+    if(cachedOwner){
+      try{if(await withDeadline(restore(cachedOwner,true),1500)){
+        setCachedOnly(true);setSession({user:{id:cachedOwner},offline:true});setLoading(false);
+      }}catch{/* Local storage cannot hold the startup screen indefinitely. */}
+    }
     if(!navigator.onLine){
       setCachedOnly(true);const owner=rememberedOwner();
       if(owner&&await restore(owner,true)){setSession({user:{id:owner},offline:true});return;}
@@ -80,7 +86,7 @@ const load=async()=>{
 
     if(sessionError) throw sessionError;
 
-    setSession(session);
+    sessionRef.current=session;setSession(session);
 
     if(session){
       await loadData(session.user.id);
@@ -98,14 +104,29 @@ const load=async()=>{
 
 
 
-const loadData=async(uid)=>{
+const loadData=(uid,token)=>{
+  if(dataLoadsRef.current.has(uid))return dataLoadsRef.current.get(uid);
+  const task=performLoadData(uid,token).finally(()=>dataLoadsRef.current.delete(uid));
+  dataLoadsRef.current.set(uid,task);return task;
+};
+const performLoadData=async(uid,token)=>{
   accountRef.current=uid;
   if(!navigator.onLine){setCachedOnly(true);try{if(await restore(uid))return;}catch(e){setStorageError(e.message)}setError('Нет сохранённых данных. Подключитесь к интернету.');return;}
 
   const queryTimeout=(label,query)=>queryWithDeadline(label,query);
 
   try{
-    const fetchGeneration=(await readOffline(uid).catch(()=>null))?.generation||0;
+    let activeSession=sessionRef.current;
+    if(!token&&(!activeSession?.access_token||activeSession.user.id!==uid)){
+      const result=await withDeadline(supabase.auth.getSession(),30000);
+      if(result.error)throw result.error;activeSession=result.data.session;
+      sessionRef.current=activeSession;
+    }
+    const accessToken=token||activeSession?.access_token;
+    if(!accessToken)throw new Error('Для обновления данных войдите в приложение с интернетом.');
+    // Data reads use the already obtained token, never re-enter Auth initialization/refresh.
+    const reader=createClient(supabaseUrl,supabaseKey,{accessToken:async()=>accessToken});
+    const fetchGeneration=(await withDeadline(readOffline(uid),1500).catch(()=>null))?.generation||0;
     console.log('[Контроль СГ] Начало загрузки данных');
 
     const [
@@ -116,23 +137,23 @@ const loadData=async(uid)=>{
     ]=await Promise.all([
       queryTimeout(
         'Сроки годности',
-        supabase.from('expiry_items')
+        reader.from('expiry_items')
           .select('*,products(*),stores(*),created:created_by(name),updated:updated_by(name)')
           .eq('is_disposed',false)
           .order('expiry_date')
       ),
       queryTimeout(
         'Справочник товаров',
-        supabase.from('products').select('*')
+        reader.from('products').select('*')
       ),
       queryTimeout(
         'Профиль пользователя',
-        supabase.from('users').select('*')
+        reader.from('users').select('*')
           .eq('id',uid).maybeSingle()
       ),
       queryTimeout(
         'Список магазинов',
-        supabase.from('stores').select('*').order('name')
+        reader.from('stores').select('*').order('name')
       )
     ]);
 
@@ -192,6 +213,7 @@ useEffect(()=>{
   }
 
   load();
+  let reloadTimer;
 
   const {data:{subscription}}=supabase.auth.onAuthStateChange(
     (_event,newSession)=>{
@@ -217,12 +239,13 @@ useEffect(()=>{
 
       if(!newSession&&!navigator.onLine&&accountRef.current)return;
       if(newSession&&accountRef.current&&accountRef.current!==newSession.user.id){accountRef.current=newSession.user.id;setUser(null);setItems([]);setProducts([]);setStores([])}
-      setSession(newSession);
+      sessionRef.current=newSession;setSession(newSession);
 
       // Первичную загрузку выполняет load().
       // Остальные события авторизации обрабатываем здесь.
       if(_event!=='INITIAL_SESSION'&&newSession){
-        loadData(newSession.user.id);
+        clearTimeout(reloadTimer);
+        reloadTimer=setTimeout(()=>loadData(newSession.user.id,newSession.access_token),0);
       }
     }
   );
@@ -248,6 +271,7 @@ useEffect(()=>{
     .subscribe();
 
   return()=>{
+    clearTimeout(reloadTimer);
     subscription.unsubscribe();
     supabase.removeChannel(ch);
   };
