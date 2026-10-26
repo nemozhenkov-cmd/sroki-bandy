@@ -5,6 +5,8 @@ import {BarcodeFormat, DecodeHintType} from '@zxing/library';
 import {createClient} from '@supabase/supabase-js';
 import {Camera, Search, Plus, PackageCheck, AlertTriangle, Clock3, LogOut, History, BarChart3, UserRound, X, Check, Trash2, RefreshCw, MapPin, ChevronDown, ChevronRight, List, Pencil} from 'lucide-react';
 import './styles.css';
+import OfflinePanel from './OfflinePanel.jsx';
+import {readOffline,rememberedOwner,cacheSnapshot,queueChange,sendQueue,pendingCount,clearOffline,project} from './offline-store.mjs';
 import {ACTION_WIDTH,swipeIntent,swipeOffset,shouldOpen} from './swipe-gesture.mjs';
 import {Wordmark,Mascot,LoadingScreen,UpdateScreen,DateFields} from './Brand.jsx';
 import {daysLeft, statusFor} from './expiry-status.mjs';
@@ -29,6 +31,31 @@ const [recoveryMode,setRecoveryMode]=useState(
 );
 const [confirmationMessage,setConfirmationMessage]=useState(false);
 const [recommendations,setRecommendations]=useState([]);
+const [online,setOnline]=useState(navigator.onLine),[storageError,setStorageError]=useState(''),[cachedOnly,setCachedOnly]=useState(false);
+const accountRef=useRef(null);
+const restore=async(uid,activate=false)=>{
+ const state=await readOffline(uid);
+ if(!state?.snapshot?.user||(!activate&&accountRef.current!==uid)||(activate&&accountRef.current&&accountRef.current!==uid))return false;
+ accountRef.current=uid;setItems(project(state));setProducts([...state.snapshot.products,...state.queue.filter(x=>x.kind==='add').map(x=>x.row.products)]);setUser(state.snapshot.user);setStores(state.snapshot.stores);
+ if(state.snapshot.user.role!=='admin')setStore(state.snapshot.user.store_id);
+ return true;
+};
+const commit=async(kind,row,base)=>{
+ if(storageError)throw new Error(storageError);
+ const owner=accountRef.current;if(!owner)throw new Error('Сначала загрузите профиль.');
+ const before=await pendingCount(owner);
+ await queueChange(owner,kind,row,base);await restore(owner);
+ if(navigator.onLine&&before===0){
+  sendQueue(supabase,owner).then(()=>restore(owner)).catch(e=>{if(accountRef.current===owner)setError('Сохранено на телефоне. '+e.message)});
+ }
+};
+useEffect(()=>{
+ const status=()=>{setOnline(navigator.onLine);if(navigator.onLine&&accountRef.current)loadData(accountRef.current)};
+ const changed=()=>{if(accountRef.current)restore(accountRef.current).catch(e=>setStorageError(e.message))};
+ window.addEventListener('online',status);window.addEventListener('offline',status);window.addEventListener('offline-data',changed);
+ return()=>{window.removeEventListener('online',status);window.removeEventListener('offline',status);window.removeEventListener('offline-data',changed)};
+},[]);
+
 
 
 const load=async()=>{
@@ -40,6 +67,11 @@ const load=async()=>{
 
   try{
     setError('');
+    if(!navigator.onLine){
+      setCachedOnly(true);const owner=rememberedOwner();
+      if(owner&&await restore(owner,true)){setSession({user:{id:owner},offline:true});return;}
+      throw new Error('Для первого входа и загрузки товаров нужен интернет.');
+    }
 
     const {data:{session},error:sessionError}=await withDeadline(
       supabase.auth.getSession(),
@@ -55,7 +87,10 @@ const load=async()=>{
     }
   }catch(err){
     console.error('Ошибка загрузки приложения:',err);
-    setError(err?.message||'Не удалось загрузить данные. Попробуйте ещё раз.');
+    const owner=rememberedOwner();
+    let restored=false;try{restored=!!owner&&await restore(owner,true)}catch{}
+    if(restored){setCachedOnly(true);setSession({user:{id:owner},offline:true});}
+    setError(restored?'Показана сохранённая копия. Проверьте связь перед отправкой.':err?.message||'Не удалось загрузить данные. Попробуйте ещё раз.');
   }finally{
     setLoading(false);
   }
@@ -64,9 +99,13 @@ const load=async()=>{
 
 
 const loadData=async(uid)=>{
+  accountRef.current=uid;
+  if(!navigator.onLine){setCachedOnly(true);try{if(await restore(uid))return;}catch(e){setStorageError(e.message)}setError('Нет сохранённых данных. Подключитесь к интернету.');return;}
+
   const queryTimeout=(label,query)=>queryWithDeadline(label,query);
 
   try{
+    const fetchGeneration=(await readOffline(uid).catch(()=>null))?.generation||0;
     console.log('[Контроль СГ] Начало загрузки данных');
 
     const [
@@ -97,8 +136,15 @@ const loadData=async(uid)=>{
       )
     ]);
 
-    setItems(it||[]);
+    if(accountRef.current!==uid)return;
+    try{
+      const cached=await cacheSnapshot(uid,{items:it||[],products:p||[],user:u,stores:s||[]},fetchGeneration);
+      if(cached.cacheSkipped){await restore(uid);return;}
+      setCachedOnly(false);
+      setStorageError('');setItems(project(cached));
+    }catch(e){setStorageError(e.message);setItems(it||[])}
     setProducts(p||[]);
+    try{const cached=await readOffline(uid);if(cached?.queue.length)setProducts([...(p||[]),...cached.queue.filter(x=>x.kind==='add').map(x=>x.row.products)])}catch{}
     setUser(u);
 
     if(u && (u.role==='manager'||u.role==='srtz_rtz')){
@@ -133,6 +179,7 @@ const loadData=async(uid)=>{
     console.log('[Контроль СГ] Все основные данные загружены');
   }catch(err){
     console.error('[Контроль СГ] Ошибка загрузки:',err);
+    try{if(await restore(uid))setCachedOnly(true)}catch{}
     setError(err?.message||'Не удалось загрузить данные.');
   }
 };
@@ -168,6 +215,8 @@ useEffect(()=>{
         setRecoveryMode(true);
       }
 
+      if(!newSession&&!navigator.onLine&&accountRef.current)return;
+      if(newSession&&accountRef.current&&accountRef.current!==newSession.user.id){accountRef.current=newSession.user.id;setUser(null);setItems([]);setProducts([]);setStores([])}
       setSession(newSession);
 
       // Первичную загрузку выполняет load().
@@ -206,6 +255,7 @@ useEffect(()=>{
 
 
 if(loading)return <Splash/>;
+if(error&&!session&&!navigator.onLine)return <div className="center"><h1>Нет связи</h1><p>{error}</p><button className="primary" onClick={()=>{setLoading(true);load()}}>Повторить</button></div>;
 if(!supabase)return <Setup/>;
 if(error && session && !user)return (
   <div className="center">
@@ -248,6 +298,8 @@ const visibleStores=user?.role==='admin'
  return (
   <div className={`app ${tab === 'add' ? 'adding-product' : tab === 'home' ? 'home-screen' : ''}`}>
 <header className="app-header"><Wordmark/></header>
+ <OfflinePanel owner={user.id} online={online} cachedOnly={cachedOnly} storageError={storageError} refresh={{send:()=>sendQueue(supabase,user.id),load:async()=>{if(navigator.onLine)await loadData(user.id);else await restore(user.id)}}}/>
+
  {tab==='home'&&<><section className="home-hero"><div className="hero-copy"><h1>Сроки<br/>под контролем</h1><div className="store-picker"><MapPin size={18}/><select aria-label="Магазин" value={store} onChange={e=>setStore(e.target.value)}>{user.role==='admin'&&<option value="all">Все магазины</option>}{visibleStores.map(s=><option key={s.id} value={s.id}>{s.name}{!s.is_active?' · Неактивен':''}</option>)}</select><ChevronDown size={16}/></div></div><Mascot className="hero-mascot"/></section>{(user.role==='manager'||user.role==='srtz_rtz')&&recommendations.length>0&&(
   <button
     className="recommend-button"
@@ -256,7 +308,7 @@ const visibleStores=user?.role==='admin'
     🟡 РЕКОМЕНДУЕМ ПРОВЕРИТЬ
   </button>
 )}<div className="stats"><Stat n={counts.expired} t="Просрочено" c="expired" selected={filter==='expired'} on={()=>setFilter('expired')}/><Stat n={counts.today} t="Списать сегодня" c="today" selected={filter==='today'} on={()=>setFilter('today')}/><Stat n={counts.soon} t="Скоро истекает" c="soon" selected={filter==='soon'} on={()=>setFilter('soon')}/><Stat n={counts.ok} t="В порядке" c="ok" selected={filter==='ok'} on={()=>setFilter('ok')}/></div><div className="search"><Search size={20}/><input value={q} onChange={e=>setQ(e.target.value)} aria-label="Поиск товара или штрихкода" placeholder="Название или штрихкод"/>{q&&<button className="search-clear" aria-label="Очистить поиск" onClick={()=>setQ('')}><X size={18}/></button>}</div><div className="list-head"><b>{filter==='all'?'Все товары':filter==='expired'?'Просрочено':filter==='today'?'Списать сегодня':filter==='soon'?'Скоро истекает':'В порядке'}</b><button onClick={()=>setFilter('all')}>Сбросить</button></div><div className="list">{filtered.length?<SwipeItems items={filtered} onEdit={x=>{setDisposeOnly(false);setEdit(x)}} onDispose={x=>{setDisposeOnly(true);setEdit(x)}}/>:<Empty/>}</div></>}
- {tab==='add'&&<Add stores={visibleStores} products={products} user={user} onClose={()=>setTab('home')} onSaved={()=>{loadData(user.id);setTab('home')}}/>}
+ {tab==='add'&&<Add stores={visibleStores} products={products} user={user} items={items} onCommit={commit} onClose={()=>setTab('home')} onSaved={()=>{loadData(user.id);setTab('home')}}/>}
 {tab==='recommendations'&&(
   <section className="recommendations">
 
@@ -311,19 +363,19 @@ const visibleStores=user?.role==='admin'
 
   </section>
 )}
- {tab==='stats'&&<Stats
+ {tab==='stats'&&!online&&<section className="page"><h2>Статистика</h2><p>Для отчёта по общей базе подключитесь к интернету. Сохранённый список товаров доступен на главном экране.</p></section>}{tab==='stats'&&online&&<Stats
   items={items}
   stores={visibleStores}
   user={user}
-/>} {tab==='history'&&<HistoryView/>} {tab==='profile'&&(
+/>} {tab==='history'&&(!online?<section className="page"><h2>История</h2><p>История общей базы доступна с интернетом. Неотправленные действия — в разделе «Подробнее» над списком.</p></section>:<HistoryView/>)} {tab==='profile'&&!online&&<section className="page"><h2>Профиль</h2><p>{user.name}</p><p>Настройки профиля и магазинов доступны при подключении к интернету.</p></section>}{tab==='profile'&&online&&(
   <Profile
     user={user}
     session={session}
     stores={stores}
     onStoresChanged={()=>loadData(user.id)}
-    onLogout={async()=>{await disablePush(supabase);await supabase.auth.signOut();}}
+    onLogout={async()=>{if(await pendingCount(user.id))throw new Error('Сначала отправьте локальные изменения. Они ещё не сохранены в общей базе.');await disablePush(supabase);await clearOffline(user.id);accountRef.current=null;const r=await supabase.auth.signOut();if(r.error)throw r.error;setUser(null);setItems([]);}}
   />
-)}<nav aria-label="Основная навигация"><button className={tab==='home'?'sel':''} onClick={()=>setTab('home')}><List/>Список</button><button className={tab==='stats'?'sel':''} onClick={()=>setTab('stats')}><BarChart3/>Статистика</button><button className="add" aria-label="Добавить товар" onClick={()=>setTab('add')}><Plus/></button><button className={tab==='history'?'sel':''} onClick={()=>setTab('history')}><History/>История</button><button className={tab==='profile'?'sel':''} onClick={()=>setTab('profile')}><UserRound/>Профиль</button></nav>{edit&&<Edit x={edit} disposeOnly={disposeOnly} stores={visibleStores} onClose={()=>setEdit(null)} onSaved={()=>{loadData(user.id);setEdit(null)}}/>}
+)}<nav aria-label="Основная навигация"><button className={tab==='home'?'sel':''} onClick={()=>setTab('home')}><List/>Список</button><button className={tab==='stats'?'sel':''} onClick={()=>setTab('stats')}><BarChart3/>Статистика</button><button className="add" aria-label="Добавить товар" onClick={()=>setTab('add')}><Plus/></button><button className={tab==='history'?'sel':''} onClick={()=>setTab('history')}><History/>История</button><button className={tab==='profile'?'sel':''} onClick={()=>setTab('profile')}><UserRound/>Профиль</button></nav>{edit&&<Edit x={edit} onCommit={commit} disposeOnly={disposeOnly} stores={visibleStores} onClose={()=>setEdit(null)} onSaved={()=>{loadData(user.id);setEdit(null)}}/>}
 {error&&<div className="toast">{error}<X onClick={()=>setError('')}/></div>}
 </div>
  );
@@ -759,9 +811,9 @@ function SwipeItem({x,open,onOpen,onClose,onEdit,onDispose}){
 }
 function Item({x,onClick,gestureProps={},style}){
   const s=statusFor(x.expiry_date);
-  return <button {...gestureProps} style={style} className={'item '+s} onClick={onClick} title={x.products?.name}>
+  return <button {...gestureProps} style={style} className={'item '+s+(x._pending?' pending-item':'')} onClick={onClick} title={x.products?.name}>
     <div className="itemmain">
-      <h3>{x.products?.name||'Без названия'}</h3>
+      <h3>{x.products?.name||'Без названия'}</h3>{x._pending&&<small className={'pending-mark'+(x._conflict?' conflict':'')}>{x._conflict?'Нужно проверить':'Не отправлено'}</small>}
       <div className="item-details">
         <div><span className={'status-badge '+s}>{s==='expired'?<AlertTriangle size={13}/>:s==='ok'?<Check size={13}/>:<Clock3 size={13}/>} {statusLabels[s]}</span><strong>Годен до <b>{fmt(x.expiry_date)}</b></strong></div>
         <span className="item-quantity">{x.quantity} <small>шт.</small></span><ChevronRight size={18} className="item-chevron"/>
@@ -770,7 +822,7 @@ function Item({x,onClick,gestureProps={},style}){
   </button>;
 }
 function Empty(){return <div className="empty"><Mascot/><b>Ничего не найдено</b><span>Попробуйте изменить фильтр<br/>или добавить товар.</span></div>;}
-function Add({stores,products,user,onClose,onSaved}){
+function Add({stores,products,user,items,onCommit,onClose,onSaved}){
  const [barcode,setBarcode]=useState(''),
  [name,setName]=useState(''),
  [brand,setBrand]=useState(''),
@@ -1045,6 +1097,7 @@ function Add({stores,products,user,onClose,onSaved}){
    return;
   }
 
+  if(!navigator.onLine){setName('');setBrand('');setMsg('Нет связи — введите название вручную.');return;}
   setBusy(true);
 
   try{
@@ -1083,197 +1136,27 @@ function Add({stores,products,user,onClose,onSaved}){
  };
 
 
+const makeRow=(id,product,quantity,old={})=>({...old,id,product_id:product.id,products:product,store_id:store,stores:stores.find(s=>s.id===store),expiry_date:expiry,quantity,note,created_by:old.created_by||user.id,updated_by:user.id,is_disposed:false,created:old.created||{name:user.name}});
 const save=async()=>{
-  if(!barcode||!name||!expiry){
-    return setMsg('Заполните штрихкод, название и срок.');
-  }
-
-  if(!Number.isInteger(Number(qty))||Number(qty)<1){
-    return setMsg('Количество должно быть целым числом не меньше 1.');
-  }
-
-  setBusy(true);
-  setMsg('');
-
-  const cleanBarcode=String(barcode).replace(/\D/g,'');
-  const newQuantity=Number(qty);
-
-  let p=products.find(
-    p=>String(p.barcode||'').replace(/\D/g,'')===cleanBarcode
-  );
-
-  if(!p){
-    const r=await supabase
-      .from('products')
-      .insert({
-        barcode:cleanBarcode,
-        name,
-        brand
-      })
-      .select()
-      .single();
-
-    if(r.error){
-      setMsg(r.error.message);
-      setBusy(false);
-      return;
-    }
-
-    p=r.data;
-  }
-
-  const {data:existing,error:existingError}=await supabase
-    .from('expiry_items')
-    .select('id,quantity,expiry_date,store_id,product_id')
-    .eq('product_id',p.id)
-    .eq('store_id',store)
-    .eq('expiry_date',expiry)
-    .eq('is_disposed',false)
-    .limit(1)
-    .maybeSingle();
-
-  if(existingError){
-    setMsg(existingError.message);
-    setBusy(false);
-    return;
-  }
-
-  if(existing){
-    setDuplicate({
-      id:existing.id,
-      currentQuantity:Number(existing.quantity),
-      newQuantity,
-      name,
-      expiry,
-      note,
-      productId:p.id,
-      storeId:store
-    });
-
-    setBusy(false);
-    return;
-  }
-
-  const r=await supabase
-    .from('expiry_items')
-    .insert({
-      product_id:p.id,
-      store_id:store,
-      expiry_date:expiry,
-      quantity:newQuantity,
-      note,
-      created_by:user.id,
-      updated_by:user.id
-    });
-
-  if(r.error){
-    if(r.error.code==='23505'){
-      const {data:raceExisting,error:raceError}=await supabase
-        .from('expiry_items')
-        .select('id,quantity')
-        .eq('product_id',p.id)
-        .eq('store_id',store)
-        .eq('expiry_date',expiry)
-        .eq('is_disposed',false)
-        .limit(1)
-        .maybeSingle();
-
-      if(raceError){
-        setMsg(raceError.message);
-      }else if(raceExisting){
-        setDuplicate({
-          id:raceExisting.id,
-          currentQuantity:Number(raceExisting.quantity),
-          newQuantity,
-          name,
-          expiry,
-          note,
-          productId:p.id,
-          storeId:store
-        });
-      }else{
-        setMsg(r.error.message);
-      }
-    }else{
-      setMsg(r.error.message);
-    }
-  }else{
-    onSaved();
-  }
-
-  setBusy(false);
+ if(!barcode||!name.trim()||!expiry)return setMsg('Заполните штрихкод, название и срок.');
+ if(!Number.isInteger(Number(qty))||Number(qty)<1||Number(qty)>2147483647)return setMsg('Количество должно быть целым числом от 1 до 2147483647.');
+ if(!store)return setMsg('Выберите магазин.');
+ const cleanBarcode=String(barcode).replace(/\D/g,'');
+ if(!cleanBarcode)return setMsg('Укажите штрихкод цифрами.');
+ const product=products.find(p=>String(p.barcode||'').replace(/\D/g,'')===cleanBarcode)||{id:crypto.randomUUID(),barcode:cleanBarcode,name:name.trim(),brand};
+ const existing=items.find(x=>x.products?.barcode===cleanBarcode&&x.store_id===store&&x.expiry_date===expiry);
+ if(existing){setDuplicate({id:existing.id,currentQuantity:Number(existing.quantity),newQuantity:Number(qty),name,expiry,note,product});return;}
+ setBusy(true);setMsg('');
+ try{await onCommit('add',makeRow(crypto.randomUUID(),product,Number(qty)));onSaved()}catch(e){setMsg(e.message)}finally{setBusy(false)}
 };
-
 const finishDuplicate=async(action)=>{
-  if(!duplicate)return;
-
-  if(action==='cancel'){
-    setDuplicate(null);
-    setMsg('');
-    return;
-  }
-
-  setBusy(true);
-  setMsg('');
-
-  try{
-    const {data:latest,error:latestError}=await supabase
-      .from('expiry_items')
-      .select('id,quantity')
-      .eq('id',duplicate.id)
-      .eq('is_disposed',false)
-      .maybeSingle();
-
-    if(latestError)throw latestError;
-
-    if(!latest){
-      setDuplicate(null);
-      throw new Error('Запись уже удалена или списана. Повторите добавление.');
-    }
-
-    if(Number(latest.quantity)!==duplicate.currentQuantity){
-      setDuplicate({
-        ...duplicate,
-        currentQuantity:Number(latest.quantity)
-      });
-      setMsg('Количество изменилось. Проверьте расчёт и нажмите кнопку ещё раз.');
-      return;
-    }
-
-    if(action==='sum'){
-      const {error}=await supabase.rpc('add_expiry_quantity',{
-        p_item_id:duplicate.id,
-        p_quantity:duplicate.newQuantity,
-        p_note:duplicate.note
-      });
-
-      if(error)throw error;
-    }else if(action==='replace'){
-      const {data,error}=await supabase
-        .from('expiry_items')
-        .update({
-          quantity:duplicate.newQuantity,
-          note:duplicate.note,
-          updated_by:user.id,
-          updated_at:new Date().toISOString()
-        })
-        .eq('id',duplicate.id)
-        .eq('is_disposed',false)
-        .select('id')
-        .maybeSingle();
-
-      if(error)throw error;
-      if(!data)throw new Error('Запись уже изменена или списана. Повторите добавление.');
-    }
-
-    setDuplicate(null);
-    onSaved();
-
-  }catch(error){
-    setMsg(error.message||'Не удалось сохранить количество.');
-  }finally{
-    setBusy(false);
-  }
+ if(!duplicate)return;
+ if(action==='cancel'){setDuplicate(null);setMsg('');return;}
+ const current=items.find(x=>x.id===duplicate.id);
+ if(!current){setDuplicate(null);setMsg('Партия уже недоступна. Повторите добавление.');return;}
+ if(Number(current.quantity)!==duplicate.currentQuantity){setDuplicate({...duplicate,currentQuantity:Number(current.quantity)});setMsg('Количество изменилось. Проверьте его ещё раз.');return;}
+ setBusy(true);setMsg('');
+ try{await onCommit('update',makeRow(current.id,current.products,action==='sum'?Number(current.quantity)+duplicate.newQuantity:duplicate.newQuantity,current),current);setDuplicate(null);onSaved()}catch(e){setMsg(e.message)}finally{setBusy(false)}
 };
  return (
   <section className="sheet">
@@ -1523,9 +1406,12 @@ const finishDuplicate=async(action)=>{
  );
 }
 
-function Edit({x,stores,onClose,onSaved,disposeOnly=false}){const [expiry,setExpiry]=useState(x.expiry_date),[qty,setQty]=useState(x.quantity),[store,setStore]=useState(x.store_id),[note,setNote]=useState(x.note||''),[busy,setBusy]=useState(false),[msg,setMsg]=useState('');
- const save=async()=>{setBusy(true);const {data:{user}}=await supabase.auth.getUser();const r=await supabase.from('expiry_items').update({expiry_date:expiry,quantity:qty,store_id:store,note,updated_by:user.id}).eq('id',x.id);if(r.error)setMsg(r.error.message);else onSaved();setBusy(false)};
- const dispose=async()=>{setBusy(true);setMsg('');const {data:{user}}=await supabase.auth.getUser();const {error}=await supabase.from('expiry_items').update({is_disposed:true,updated_by:user.id,updated_at:new Date().toISOString()}).eq('id',x.id).eq('is_disposed',false);if(error){setMsg(error.message);setBusy(false);return}onSaved();};
+function Edit({x,stores,onClose,onSaved,onCommit,disposeOnly=false}){const [expiry,setExpiry]=useState(x.expiry_date),[qty,setQty]=useState(x.quantity),[store,setStore]=useState(x.store_id),[note,setNote]=useState(x.note||''),[busy,setBusy]=useState(false),[msg,setMsg]=useState('');
+ const save=async()=>{
+ if(!Number.isInteger(Number(qty))||Number(qty)<1||Number(qty)>2147483647){setMsg('Количество должно быть целым числом от 1 до 2147483647.');return;}
+ setBusy(true);setMsg('');try{await onCommit('update',{...x,expiry_date:expiry,quantity:Number(qty),store_id:store,stores:stores.find(s=>s.id===store),note},x);onSaved()}catch(e){setMsg(e.message)}finally{setBusy(false)}
+ };
+ const dispose=async()=>{setBusy(true);setMsg('');try{await onCommit('dispose',{...x,is_disposed:true},x);onSaved()}catch(e){setMsg(e.message)}finally{setBusy(false)}};
  if(disposeOnly)return <div className="modal"><div className="dialog" role="dialog" aria-modal="true" aria-labelledby="dispose-title"><div className="sheethead"><h2 id="dispose-title">Списать товар?</h2><button className="close-button" aria-label="Закрыть" disabled={busy} onClick={onClose}><X/></button></div><p className="dispose-name">{x.products?.name||'Без названия'}</p><p>Будет списано: <b>{x.quantity} шт.</b></p><div className="dispose-actions"><button className="secondary" autoFocus disabled={busy} onClick={onClose}>Отмена</button><button className="danger" disabled={busy} onClick={dispose}><Trash2 size={18}/>{busy?'Списываем…':'Списать'}</button></div>{msg&&<p className="msg" role="alert">{msg}</p>}</div></div>;
  return <div className="modal"><div className="dialog"><div className="sheethead"><h2>{x.products?.name}</h2><button className="close-button" aria-label="Закрыть" onClick={onClose}><X/></button></div><div className="item-info"><b>{statusText(x.expiry_date)}</b><span>EAN {x.products?.barcode}</span><span>Магазин: {x.stores?.name||'—'}</span><span>Добавил: {x.created?.name||'—'}</span></div><DateFields value={expiry} onChange={setExpiry}/><label>Количество<input type="number" min="1" value={qty} onChange={e=>setQty(+e.target.value)}/></label><label>Магазин<select value={store} onChange={e=>setStore(e.target.value)}>{stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Комментарий"/><button className="primary" disabled={busy} onClick={save}>{busy?'СОХРАНЕНИЕ…':'СОХРАНИТЬ ИЗМЕНЕНИЯ'}</button><button className="danger" disabled={busy} onClick={dispose}><Trash2/>СПИСАТЬ</button>{msg&&<p className="msg">{msg}</p>}</div></div>}
 function Stats({items,stores,user}){
@@ -2396,7 +2282,7 @@ const {error}=await supabase
       {msg && user.role!=='admin' && <p className="msg" role="status">{msg}</p>}
       <button
         className="secondary"
-        onClick={async()=>{try{await onLogout();}catch{setMsg('Не удалось отключить уведомления перед выходом. Проверьте соединение и повторите.');}}}
+        onClick={async()=>{try{await onLogout();}catch(e){setMsg(e.message||'Не удалось выйти. Проверьте соединение и повторите.');}}}
       >
         <LogOut/>
         ВЫЙТИ
