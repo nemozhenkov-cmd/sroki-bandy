@@ -3,8 +3,9 @@ import {createRoot} from 'react-dom/client';
 import {BrowserMultiFormatReader} from '@zxing/browser';
 import {BarcodeFormat, DecodeHintType} from '@zxing/library';
 import {createClient} from '@supabase/supabase-js';
-import {Camera, Search, Plus, PackageCheck, AlertTriangle, Clock3, LogOut, History, BarChart3, UserRound, X, Check, Trash2, RefreshCw, MapPin, ChevronDown, ChevronRight, List} from 'lucide-react';
+import {Camera, Search, Plus, PackageCheck, AlertTriangle, Clock3, LogOut, History, BarChart3, UserRound, X, Check, Trash2, RefreshCw, MapPin, ChevronDown, ChevronRight, List, Pencil} from 'lucide-react';
 import './styles.css';
+import {ACTION_WIDTH,swipeIntent,swipeOffset,shouldOpen} from './swipe-gesture.mjs';
 import {Wordmark,Mascot,LoadingScreen,UpdateScreen,DateFields} from './Brand.jsx';
 import {daysLeft, statusFor} from './expiry-status.mjs';
 import ExpiryCalculator from './ExpiryCalculator.jsx';
@@ -21,7 +22,7 @@ function plural(n,a){n=Math.abs(n)%100;let n1=n%10;return n>10&&n<20?a[2]:n1>1&&
 function localDate(){return new Date().toISOString().slice(0,10)}
 
 function App(){
- const [session,setSession]=useState(null),[loading,setLoading]=useState(true),[tab,setTab]=useState('home'),[store,setStore]=useState('all'),[q,setQ]=useState(''),[filter,setFilter]=useState('all'),[items,setItems]=useState([]),[products,setProducts]=useState([]),[stores,setStores]=useState(STORES),[user,setUser]=useState(null),[edit,setEdit]=useState(null),[scanner,setScanner]=useState(false),[error,setError]=useState('');
+ const [session,setSession]=useState(null),[loading,setLoading]=useState(true),[tab,setTab]=useState('home'),[store,setStore]=useState('all'),[q,setQ]=useState(''),[filter,setFilter]=useState('all'),[items,setItems]=useState([]),[products,setProducts]=useState([]),[stores,setStores]=useState(STORES),[user,setUser]=useState(null),[edit,setEdit]=useState(null),[disposeOnly,setDisposeOnly]=useState(false),[scanner,setScanner]=useState(false),[error,setError]=useState('');
 const [recoveryMode,setRecoveryMode]=useState(
   ()=>window.location.hash.includes('type=recovery')||
      window.location.search.includes('type=recovery')
@@ -254,7 +255,7 @@ const visibleStores=user?.role==='admin'
   >
     🟡 РЕКОМЕНДУЕМ ПРОВЕРИТЬ
   </button>
-)}<div className="stats"><Stat n={counts.expired} t="Просрочено" c="expired" selected={filter==='expired'} on={()=>setFilter('expired')}/><Stat n={counts.today} t="Списать сегодня" c="today" selected={filter==='today'} on={()=>setFilter('today')}/><Stat n={counts.soon} t="Скоро истекает" c="soon" selected={filter==='soon'} on={()=>setFilter('soon')}/><Stat n={counts.ok} t="В порядке" c="ok" selected={filter==='ok'} on={()=>setFilter('ok')}/></div><div className="search"><Search size={20}/><input value={q} onChange={e=>setQ(e.target.value)} aria-label="Поиск товара или штрихкода" placeholder="Название или штрихкод"/>{q&&<button className="search-clear" aria-label="Очистить поиск" onClick={()=>setQ('')}><X size={18}/></button>}</div><div className="list-head"><b>{filter==='all'?'Все товары':filter==='expired'?'Просрочено':filter==='today'?'Списать сегодня':filter==='soon'?'Скоро истекает':'В порядке'}</b><button onClick={()=>setFilter('all')}>Сбросить</button></div><div className="list">{filtered.length?filtered.map(x=><Item key={x.id} x={x} onClick={()=>setEdit(x)}/>):<Empty/>}</div></>}
+)}<div className="stats"><Stat n={counts.expired} t="Просрочено" c="expired" selected={filter==='expired'} on={()=>setFilter('expired')}/><Stat n={counts.today} t="Списать сегодня" c="today" selected={filter==='today'} on={()=>setFilter('today')}/><Stat n={counts.soon} t="Скоро истекает" c="soon" selected={filter==='soon'} on={()=>setFilter('soon')}/><Stat n={counts.ok} t="В порядке" c="ok" selected={filter==='ok'} on={()=>setFilter('ok')}/></div><div className="search"><Search size={20}/><input value={q} onChange={e=>setQ(e.target.value)} aria-label="Поиск товара или штрихкода" placeholder="Название или штрихкод"/>{q&&<button className="search-clear" aria-label="Очистить поиск" onClick={()=>setQ('')}><X size={18}/></button>}</div><div className="list-head"><b>{filter==='all'?'Все товары':filter==='expired'?'Просрочено':filter==='today'?'Списать сегодня':filter==='soon'?'Скоро истекает':'В порядке'}</b><button onClick={()=>setFilter('all')}>Сбросить</button></div><div className="list">{filtered.length?<SwipeItems items={filtered} onEdit={x=>{setDisposeOnly(false);setEdit(x)}} onDispose={x=>{setDisposeOnly(true);setEdit(x)}}/>:<Empty/>}</div></>}
  {tab==='add'&&<Add stores={visibleStores} products={products} user={user} onClose={()=>setTab('home')} onSaved={()=>{loadData(user.id);setTab('home')}}/>}
 {tab==='recommendations'&&(
   <section className="recommendations">
@@ -322,7 +323,7 @@ const visibleStores=user?.role==='admin'
     onStoresChanged={()=>loadData(user.id)}
     onLogout={async()=>{await disablePush(supabase);await supabase.auth.signOut();}}
   />
-)}<nav aria-label="Основная навигация"><button className={tab==='home'?'sel':''} onClick={()=>setTab('home')}><List/>Список</button><button className={tab==='stats'?'sel':''} onClick={()=>setTab('stats')}><BarChart3/>Статистика</button><button className="add" aria-label="Добавить товар" onClick={()=>setTab('add')}><Plus/></button><button className={tab==='history'?'sel':''} onClick={()=>setTab('history')}><History/>История</button><button className={tab==='profile'?'sel':''} onClick={()=>setTab('profile')}><UserRound/>Профиль</button></nav>{edit&&<Edit x={edit} stores={visibleStores} onClose={()=>setEdit(null)} onSaved={()=>{loadData(user.id);setEdit(null)}}/>}
+)}<nav aria-label="Основная навигация"><button className={tab==='home'?'sel':''} onClick={()=>setTab('home')}><List/>Список</button><button className={tab==='stats'?'sel':''} onClick={()=>setTab('stats')}><BarChart3/>Статистика</button><button className="add" aria-label="Добавить товар" onClick={()=>setTab('add')}><Plus/></button><button className={tab==='history'?'sel':''} onClick={()=>setTab('history')}><History/>История</button><button className={tab==='profile'?'sel':''} onClick={()=>setTab('profile')}><UserRound/>Профиль</button></nav>{edit&&<Edit x={edit} disposeOnly={disposeOnly} stores={visibleStores} onClose={()=>setEdit(null)} onSaved={()=>{loadData(user.id);setEdit(null)}}/>}
 {error&&<div className="toast">{error}<X onClick={()=>setError('')}/></div>}
 </div>
  );
@@ -734,9 +735,31 @@ function Onboard({session,onDone}){
 }
 const statusLabels={expired:'Просрочено',today:'Списать сегодня',soon:'Скоро истекает',ok:'В порядке'};
 function Stat({n,t,c,on,selected}){return <button className={'stat '+c+(selected?' selected':'')} onClick={on} aria-pressed={selected}><b>{n}</b><span>{t}</span>{selected&&<Check size={12} className="stat-check"/>}</button>;}
-function Item({x,onClick}){
+function SwipeItems({items,onEdit,onDispose}){
+ const [open,setOpen]=useState(null),root=useRef(null);
+ useEffect(()=>{const close=e=>{if(!root.current?.contains(e.target))setOpen(null)};document.addEventListener('pointerdown',close);return()=>document.removeEventListener('pointerdown',close)},[]);
+ useEffect(()=>{setOpen(null)},[items]);
+ return <div className="swipe-list" ref={root}>{items.map(x=><SwipeItem key={x.id} x={x} open={open===x.id} onOpen={()=>setOpen(x.id)} onClose={()=>setOpen(null)} onEdit={()=>{setOpen(null);onEdit(x)}} onDispose={()=>{setOpen(null);onDispose(x)}}/>)}</div>;
+}
+function SwipeItem({x,open,onOpen,onClose,onEdit,onDispose}){
+ const start=useRef(null),suppress=useRef(false),[drag,setDrag]=useState(null);
+ const width=ACTION_WIDTH;
+ const finish=e=>{const g=start.current;if(!g||g.id!==e.pointerId)return;start.current=null;if(g.horizontal){suppress.current=true;if(shouldOpen(g.offset,e.type==='pointercancel'))onOpen();else onClose()}setDrag(null)};
+ const gestureProps={
+  onPointerDown:e=>{if(!e.isPrimary||e.button!==0)return;suppress.current=false;start.current={id:e.pointerId,x:e.clientX,y:e.clientY,base:open?-width:0,offset:open?-width:0,horizontal:false}},
+  onPointerMove:e=>{const g=start.current;if(!g||g.id!==e.pointerId)return;const dx=e.clientX-g.x,dy=e.clientY-g.y;if(!g.horizontal){const intent=swipeIntent(dx,dy);if(intent==='scroll'){start.current=null;return}if(intent==='pending')return;g.horizontal=true;e.currentTarget.setPointerCapture(e.pointerId)}g.offset=swipeOffset(g.base,dx);setDrag(g.offset)},
+  onPointerUp:finish,onPointerCancel:finish,
+  onKeyDown:e=>{if(e.key==='ArrowLeft'){e.preventDefault();onOpen()}if(e.key==='Escape'||e.key==='ArrowRight')onClose()},
+  'aria-expanded':open,'aria-label':`${x.products?.name||'Товар'}. Свайп влево или стрелка влево — действия`
+ };
+ return <div className={'swipe-item'+(open?' is-open':'')+(drag!==null?' is-dragging':'')}>
+  <div className="swipe-actions" aria-hidden={!open} inert={!open?true:undefined}><button className="swipe-edit" onClick={onEdit}><Pencil size={20}/><span>Изменить</span></button><button className="swipe-dispose" onClick={onDispose}><Trash2 size={20}/><span>Списать</span></button></div>
+  <Item x={x} gestureProps={gestureProps} style={{transform:`translateX(${drag??(open?-width:0)}px)`}} onClick={()=>{if(suppress.current){suppress.current=false;return}if(open)onClose();else onEdit()}}/>
+ </div>;
+}
+function Item({x,onClick,gestureProps={},style}){
   const s=statusFor(x.expiry_date);
-  return <button className={'item '+s} onClick={onClick} title={x.products?.name}>
+  return <button {...gestureProps} style={style} className={'item '+s} onClick={onClick} title={x.products?.name}>
     <div className="itemmain">
       <h3>{x.products?.name||'Без названия'}</h3>
       <div className="item-details">
@@ -1500,9 +1523,10 @@ const finishDuplicate=async(action)=>{
  );
 }
 
-function Edit({x,stores,onClose,onSaved}){const [expiry,setExpiry]=useState(x.expiry_date),[qty,setQty]=useState(x.quantity),[store,setStore]=useState(x.store_id),[note,setNote]=useState(x.note||''),[busy,setBusy]=useState(false),[msg,setMsg]=useState('');
+function Edit({x,stores,onClose,onSaved,disposeOnly=false}){const [expiry,setExpiry]=useState(x.expiry_date),[qty,setQty]=useState(x.quantity),[store,setStore]=useState(x.store_id),[note,setNote]=useState(x.note||''),[busy,setBusy]=useState(false),[msg,setMsg]=useState('');
  const save=async()=>{setBusy(true);const {data:{user}}=await supabase.auth.getUser();const r=await supabase.from('expiry_items').update({expiry_date:expiry,quantity:qty,store_id:store,note,updated_by:user.id}).eq('id',x.id);if(r.error)setMsg(r.error.message);else onSaved();setBusy(false)};
  const dispose=async()=>{setBusy(true);setMsg('');const {data:{user}}=await supabase.auth.getUser();const {error}=await supabase.from('expiry_items').update({is_disposed:true,updated_by:user.id,updated_at:new Date().toISOString()}).eq('id',x.id).eq('is_disposed',false);if(error){setMsg(error.message);setBusy(false);return}onSaved();};
+ if(disposeOnly)return <div className="modal"><div className="dialog" role="dialog" aria-modal="true" aria-labelledby="dispose-title"><div className="sheethead"><h2 id="dispose-title">Списать товар?</h2><button className="close-button" aria-label="Закрыть" disabled={busy} onClick={onClose}><X/></button></div><p className="dispose-name">{x.products?.name||'Без названия'}</p><p>Будет списано: <b>{x.quantity} шт.</b></p><div className="dispose-actions"><button className="secondary" autoFocus disabled={busy} onClick={onClose}>Отмена</button><button className="danger" disabled={busy} onClick={dispose}><Trash2 size={18}/>{busy?'Списываем…':'Списать'}</button></div>{msg&&<p className="msg" role="alert">{msg}</p>}</div></div>;
  return <div className="modal"><div className="dialog"><div className="sheethead"><h2>{x.products?.name}</h2><button className="close-button" aria-label="Закрыть" onClick={onClose}><X/></button></div><div className="item-info"><b>{statusText(x.expiry_date)}</b><span>EAN {x.products?.barcode}</span><span>Магазин: {x.stores?.name||'—'}</span><span>Добавил: {x.created?.name||'—'}</span></div><DateFields value={expiry} onChange={setExpiry}/><label>Количество<input type="number" min="1" value={qty} onChange={e=>setQty(+e.target.value)}/></label><label>Магазин<select value={store} onChange={e=>setStore(e.target.value)}>{stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Комментарий"/><button className="primary" disabled={busy} onClick={save}>{busy?'СОХРАНЕНИЕ…':'СОХРАНИТЬ ИЗМЕНЕНИЯ'}</button><button className="danger" disabled={busy} onClick={dispose}><Trash2/>СПИСАТЬ</button>{msg&&<p className="msg">{msg}</p>}</div></div>}
 function Stats({items,stores,user}){
   const [store,setStore]=useState(
