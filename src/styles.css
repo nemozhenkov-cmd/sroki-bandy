@@ -1448,3 +1448,19 @@ svg {
 @media(max-width:359px){
   .home-screen .hero-mascot { transform:scale(1.18); }
 }
+
+/* Swipe actions share the card silhouette and do not add height. */
+.swipe-list { display:grid; gap:8px; }
+.swipe-item { position:relative; overflow:hidden; border-radius:17px; background:#f4f4f5; }
+.swipe-item .item { touch-action:pan-y; transition:transform .18s ease; z-index:1; }
+.swipe-item.is-dragging .item { transition:none; }
+.swipe-actions { position:absolute; inset:0 0 0 auto; width:156px; display:grid; grid-template-columns:1fr 1fr; gap:4px; padding:4px; }
+.swipe-actions button { min-width:0; border-radius:13px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:7px; font-size:11px; font-weight:700; }
+.swipe-edit { background:var(--yellow,#FFD400); color:#171717; }
+.swipe-dispose { background:#b42318; color:#fff; }
+.swipe-actions button:focus-visible { outline:2px solid #171717; outline-offset:-4px; }
+.dispose-name { font-weight:700; overflow-wrap:anywhere; }
+.dispose-actions { display:flex; gap:10px; margin-top:20px; }
+.dispose-actions>button { flex:1; min-height:46px; margin:0; border-radius:12px; }
+.dispose-actions .secondary { background:#f1f1f3; font-weight:650; }
+@media(prefers-reduced-motion:reduce){ .swipe-item .item { transition:none; } }
