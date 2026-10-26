@@ -2,21 +2,22 @@
 const BASE = '/sroki-bandy/';
 const VERSION = new URL(self.location.href).searchParams.get('v') || 'legacy';
 // Change this marker when publishing a recovery so existing installations detect it.
-const RELEASE = 'swipe-actions-1';
+const RELEASE = 'offline-work-1';
 const CACHE = `sroki-bandy-${RELEASE}-${VERSION}`;
 
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE).then(cache =>
-      cache.addAll([
-        BASE,
-        `${BASE}index.html`,
-        `${BASE}manifest.webmanifest`,
-        `${BASE}brand/mascot-loading.webp`,
-        `${BASE}icon-192.png`
-      ])
-    )
-  );
+  event.waitUntil((async()=>{
+    const cache=await caches.open(CACHE);
+    const response=await fetch(`${BASE}index.html`,{cache:'no-store'});
+    if(!response.ok)throw new Error('Application shell unavailable');
+    const html=await response.clone().text();
+    const assets=[...html.matchAll(/(?:src|href)=["']([^"']+\.(?:js|css))["']/g)].map(m=>new URL(m[1],self.location.origin+BASE).href).filter(url=>url.startsWith(self.location.origin+BASE));
+    if(!assets.some(url=>url.endsWith('.js')))throw new Error('Application script missing');
+    // Install only succeeds when the complete application is available offline.
+    await cache.addAll([...assets,`${BASE}manifest.webmanifest`,`${BASE}brand/mascot-loading.webp`,`${BASE}brand/mascot-welcome.webp`,`${BASE}brand/mascot-update.webp`,`${BASE}icon-192.png`]);
+    await cache.put(BASE,response.clone());
+    await cache.put(`${BASE}index.html`,response);
+  })());
 });
 
 self.addEventListener('message', event => {

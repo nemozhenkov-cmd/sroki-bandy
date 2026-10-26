@@ -1464,3 +1464,23 @@ svg {
 .dispose-actions>button { flex:1; min-height:46px; margin:0; border-radius:12px; }
 .dispose-actions .secondary { background:#f1f1f3; font-weight:650; }
 @media(prefers-reduced-motion:reduce){ .swipe-item .item { transition:none; } }
+
+.offline-panel { margin:0 0 12px; padding:12px; border:1px solid #ecd679; border-radius:14px; background:#fff9df; font-size:12px; line-height:1.4; }
+.offline-summary { display:flex; align-items:center; gap:9px; }
+.offline-summary div { display:grid; gap:2px; }
+.offline-summary b { font-size:13px; }
+.offline-panel>small { display:block; margin-top:5px; color:#666; }
+.offline-buttons { display:flex; gap:8px; margin-top:9px; }
+.offline-buttons button { min-height:40px; border-radius:10px; padding:8px 12px; font-weight:650; }
+.offline-send { background:#FFD400; color:#161616; }
+.offline-panel button:disabled { opacity:.55; }
+.offline-queue { display:grid; gap:8px; margin-top:12px; max-height:45dvh; overflow:auto; }
+.offline-queue article { background:white; border-radius:11px; padding:11px; overflow-wrap:anywhere; }
+.offline-queue article>b,.offline-queue article>span { display:block; margin-bottom:5px; }
+.offline-queue .secondary { padding:10px; min-height:40px; border-radius:9px; }
+.item .pending-mark { display:inline-block; color:#776000; background:#fff4b8; border-radius:5px; padding:1px 5px; font-size:10px; margin-bottom:4px; }
+.item .pending-mark.conflict { color:#a22218; background:#ffe7e4; }
+.item.pending-item h3 { padding-right:92px; }
+.item .pending-mark { position:absolute; right:10px; top:10px; margin:0; }
+.offline-buttons { display:grid; grid-template-columns:minmax(0,1fr) auto; }
+.offline-buttons .secondary { width:auto; }
