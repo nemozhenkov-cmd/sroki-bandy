@@ -321,7 +321,7 @@ const visibleStores=user?.role==='admin'
 
  return (
   <div className={`app ${tab === 'add' ? 'adding-product' : tab === 'home' ? 'home-screen' : ''}`}>
-<header className={`app-header ${['profile','history'].includes(tab)?'section-header':''}`}><Wordmark/>{tab==='profile'&&<><span className="header-version">Версия {__APP_RELEASE__}</span><h2>Профиль</h2></>}{tab==='history'&&<h2>История</h2>}</header>
+<header className={`app-header ${['profile','history'].includes(tab)?'section-header':''}`}><Wordmark/>{tab==='profile'&&<><span className="header-version" data-build={__APP_VERSION__}>Версия {__APP_RELEASE__}</span><h2>Профиль</h2></>}{tab==='history'&&<h2>История</h2>}</header>
  <OfflinePanel owner={user.id} online={online} cachedOnly={cachedOnly} storageError={storageError} refresh={{send:()=>sendQueue(supabase,user.id),load:async()=>{if(navigator.onLine)await loadData(user.id);else await restore(user.id)}}}/>
 
  {tab==='home'&&<><section className="home-hero"><div className="hero-copy"><h1>Сроки<br/>под контролем</h1><div className="store-picker"><MapPin size={18}/><select aria-label="Магазин" value={store} onChange={e=>setStore(e.target.value)}>{user.role==='admin'&&<option value="all">Все магазины</option>}{visibleStores.map(s=><option key={s.id} value={s.id}>{s.name}{!s.is_active?' · Неактивен':''}</option>)}</select><ChevronDown size={16}/></div></div><Mascot className="hero-mascot"/></section>{(user.role==='manager'||user.role==='srtz_rtz')&&recommendations.length>0&&(
@@ -2333,6 +2333,9 @@ function UpdateManager() {
 
     let registration;
     let checkTimer;
+    let stopped = false;
+    let removeUpdateListener;
+    const watched = new Map();
 
     const checkForUpdate = async () => {
       try {
@@ -2345,6 +2348,7 @@ function UpdateManager() {
     };
 
     const showWaitingWorker = () => {
+      if (stopped) return;
       if (registration?.waiting && navigator.serviceWorker.controller) {
         setUpdateReady(true);
         setUpdateError('');
@@ -2366,28 +2370,33 @@ function UpdateManager() {
     const start = async () => {
       try {
         registration = await navigator.serviceWorker.register(
-          `${import.meta.env.BASE_URL}sw.js?v=${encodeURIComponent(__APP_VERSION__)}`,
+          `${import.meta.env.BASE_URL}sw.js`,
           { updateViaCache: 'none' }
         );
 
+        if (stopped) return;
         registrationRef.current = registration;
 
         showWaitingWorker();
 
-        registration.addEventListener('updatefound', () => {
+        const watchInstalling = () => {
           const worker = registration.installing;
-          if (!worker) return;
-
-          worker.addEventListener('statechange', () => {
-            if (worker.state === 'installed') {
-              showWaitingWorker();
-            }
-          });
-        });
+          if (!worker || watched.has(worker)) return;
+          const changed = () => {
+            if (worker.state === 'installed') showWaitingWorker();
+          };
+          watched.set(worker, changed);
+          worker.addEventListener('statechange', changed);
+          changed();
+        };
+        registration.addEventListener('updatefound', watchInstalling);
+        removeUpdateListener = () => registration.removeEventListener('updatefound', watchInstalling);
+        // Installation may have started before register() resolved.
+        watchInstalling();
 
         await registration.update();
 
-        checkTimer = window.setInterval(checkForUpdate, 60000);
+        if (!stopped) checkTimer = window.setInterval(checkForUpdate, 60000);
       } catch (error) {
         console.error('Ошибка регистрации Service Worker:', error);
       }
@@ -2403,9 +2412,14 @@ function UpdateManager() {
     }
 
     document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('online', checkForUpdate);
     start();
 
     return () => {
+      stopped = true;
+      window.removeEventListener('online', checkForUpdate);
+      removeUpdateListener?.();
+      for (const [worker, listener] of watched) worker.removeEventListener('statechange', listener);
       if (checkTimer) window.clearInterval(checkTimer);
       document.removeEventListener('visibilitychange', handleVisibility);
       navigator.serviceWorker.removeEventListener(

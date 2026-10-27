@@ -1,8 +1,9 @@
 
 const BASE = '/sroki-bandy/';
-const VERSION = new URL(self.location.href).searchParams.get('v') || 'legacy';
+const BUILD = '__SROKI_BUILD__';
+const VERSION = BUILD.startsWith('__') ? new URL(self.location.href).searchParams.get('v') || 'dev' : BUILD;
 // Change this marker when publishing a recovery so existing installations detect it.
-const RELEASE = 'offline-startup-recovery-1';
+const RELEASE = 'versioned-updates-2';
 const CACHE = `sroki-bandy-${RELEASE}-${VERSION}`;
 
 self.addEventListener('install', event => {
