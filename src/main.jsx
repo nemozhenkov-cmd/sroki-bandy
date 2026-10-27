@@ -321,7 +321,7 @@ const visibleStores=user?.role==='admin'
 
  return (
   <div className={`app ${tab === 'add' ? 'adding-product' : tab === 'home' ? 'home-screen' : ''}`}>
-<header className={`app-header ${['profile','history'].includes(tab)?'section-header':''}`}><Wordmark/>{tab==='profile'&&<><span className="header-version" data-build={__APP_VERSION__}>Версия {__APP_RELEASE__}</span><h2>Профиль</h2></>}{tab==='history'&&<h2>История</h2>}</header>
+<header className={`app-header ${['profile','history','stats'].includes(tab)?'section-header':''}`}><Wordmark/>{tab==='profile'&&<><span className="header-version" data-build={__APP_VERSION__}>Версия {__APP_RELEASE__}</span><h2>Профиль</h2></>}{tab==='history'&&<h2>История</h2>}{tab==='stats'&&<h2>Статистика</h2>}</header>
  <OfflinePanel owner={user.id} online={online} cachedOnly={cachedOnly} storageError={storageError} refresh={{send:()=>sendQueue(supabase,user.id),load:async()=>{if(navigator.onLine)await loadData(user.id);else await restore(user.id)}}}/>
 
  {tab==='home'&&<><section className="home-hero"><div className="hero-copy"><h1>Сроки<br/>под контролем</h1><div className="store-picker"><MapPin size={18}/><select aria-label="Магазин" value={store} onChange={e=>setStore(e.target.value)}>{user.role==='admin'&&<option value="all">Все магазины</option>}{visibleStores.map(s=><option key={s.id} value={s.id}>{s.name}{!s.is_active?' · Неактивен':''}</option>)}</select><ChevronDown size={16}/></div></div><Mascot className="hero-mascot"/></section>{(user.role==='manager'||user.role==='srtz_rtz')&&recommendations.length>0&&(
@@ -358,7 +358,7 @@ const visibleStores=user?.role==='admin'
 
   </section>
 )}
- {tab==='stats'&&!online&&<section className="page"><h2>Статистика</h2><p>Для отчёта по общей базе подключитесь к интернету. Сохранённый список товаров доступен на главном экране.</p></section>}{tab==='stats'&&online&&<Stats
+ {tab==='stats'&&!online&&<section className="page"><p>Для отчёта по общей базе подключитесь к интернету. Сохранённый список товаров доступен на главном экране.</p></section>}{tab==='stats'&&online&&<Stats
   items={items}
   stores={visibleStores}
   user={user}
@@ -1522,8 +1522,6 @@ function Stats({items,stores,user}){
 
   return (
     <section className="page">
-      <h2>Статистика</h2>
-
       <div className="store-tabs">
         <button
           className={store==='all'?'active':''}
