@@ -1501,3 +1501,8 @@ svg {
 .recommendation-dialog .sheethead{align-items:flex-start}
 .recommendation-dialog .recommendation-info b{overflow-wrap:anywhere}
 .recommendation-note{background:#fff6c5;border-radius:12px;padding:12px;font-size:13px;line-height:1.5;margin:18px 0}
+
+.section-header{gap:8px}
+.section-header .wordmark{flex-shrink:0}
+.header-version{font-size:12px;font-weight:400;color:#606570;white-space:nowrap;text-align:center}
+.section-header h2{font-size:18px;font-weight:650;margin:0;white-space:nowrap;letter-spacing:-.3px}

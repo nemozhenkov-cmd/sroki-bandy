@@ -321,7 +321,7 @@ const visibleStores=user?.role==='admin'
 
  return (
   <div className={`app ${tab === 'add' ? 'adding-product' : tab === 'home' ? 'home-screen' : ''}`}>
-<header className="app-header"><Wordmark/></header>
+<header className={`app-header ${['profile','history'].includes(tab)?'section-header':''}`}><Wordmark/>{tab==='profile'&&<><span className="header-version">Версия {__APP_RELEASE__}</span><h2>Профиль</h2></>}{tab==='history'&&<h2>История</h2>}</header>
  <OfflinePanel owner={user.id} online={online} cachedOnly={cachedOnly} storageError={storageError} refresh={{send:()=>sendQueue(supabase,user.id),load:async()=>{if(navigator.onLine)await loadData(user.id);else await restore(user.id)}}}/>
 
  {tab==='home'&&<><section className="home-hero"><div className="hero-copy"><h1>Сроки<br/>под контролем</h1><div className="store-picker"><MapPin size={18}/><select aria-label="Магазин" value={store} onChange={e=>setStore(e.target.value)}>{user.role==='admin'&&<option value="all">Все магазины</option>}{visibleStores.map(s=><option key={s.id} value={s.id}>{s.name}{!s.is_active?' · Неактивен':''}</option>)}</select><ChevronDown size={16}/></div></div><Mascot className="hero-mascot"/></section>{(user.role==='manager'||user.role==='srtz_rtz')&&recommendations.length>0&&(
@@ -362,7 +362,7 @@ const visibleStores=user?.role==='admin'
   items={items}
   stores={visibleStores}
   user={user}
-/>} {tab==='history'&&(!online?<section className="page"><h2>История</h2><p>История общей базы доступна с интернетом. Неотправленные действия — в разделе «Подробнее» над списком.</p></section>:<HistoryView/>)} {tab==='profile'&&!online&&<section className="page"><h2>Профиль</h2><p>{user.name}</p><p>Настройки профиля и магазинов доступны при подключении к интернету.</p></section>}{tab==='profile'&&online&&(
+/>} {tab==='history'&&(!online?<section className="page"><p>История общей базы доступна с интернетом. Неотправленные действия — в разделе «Подробнее» над списком.</p></section>:<HistoryView/>)} {tab==='profile'&&!online&&<section className="page"><p>{user.name}</p><p>Настройки профиля и магазинов доступны при подключении к интернету.</p></section>}{tab==='profile'&&online&&(
   <Profile
     user={user}
     session={session}
@@ -1650,7 +1650,7 @@ function Stats({items,stores,user}){
 function HistoryView(){
  const [rows,setRows]=useState([]),[loading,setLoading]=useState(true),[msg,setMsg]=useState('');
  useEffect(()=>{(async()=>{const {data,error}=await supabase.from('history').select('*,users(name),expiry_items(products(name),stores(name))').order('created_at',{ascending:false}).limit(100);if(error)setMsg(error.message);else setRows(data||[]);setLoading(false)})()},[]);
- return <section className="page"><h2>История</h2>{loading?<div className="empty"><RefreshCw/><span>Загрузка…</span></div>:msg?<div className="empty"><AlertTriangle/><span>{msg}</span></div>:rows.length?<div className="history-list">{rows.map(r=><article className={'history-row '+r.action} key={r.id}><div className="history-icon">{r.action==='added'?<Plus size={19}/>:r.action==='disposed'?<Trash2 size={18}/>:<RefreshCw size={18}/>}</div><div className="history-content"><b>{r.action==='added'?'Добавлен товар':r.action==='disposed'?'Списан товар':'Изменён товар'}</b><p>{r.expiry_items?.products?.name||'Товар'}</p><small>{r.users?.name||'Сотрудник'} · {r.expiry_items?.stores?.name||'—'}</small><time>{new Date(r.created_at).toLocaleString('ru-RU')}</time></div></article>)}</div>:<div className="empty"><History size={42}/><b>История пока пуста</b><span>Изменения появятся здесь автоматически.</span></div>}</section>;
+ return <section className="page">{loading?<div className="empty"><RefreshCw/><span>Загрузка…</span></div>:msg?<div className="empty"><AlertTriangle/><span>{msg}</span></div>:rows.length?<div className="history-list">{rows.map(r=><article className={'history-row '+r.action} key={r.id}><div className="history-icon">{r.action==='added'?<Plus size={19}/>:r.action==='disposed'?<Trash2 size={18}/>:<RefreshCw size={18}/>}</div><div className="history-content"><b>{r.action==='added'?'Добавлен товар':r.action==='disposed'?'Списан товар':'Изменён товар'}</b><p>{r.expiry_items?.products?.name||'Товар'}</p><small>{r.users?.name||'Сотрудник'} · {r.expiry_items?.stores?.name||'—'}</small><time>{new Date(r.created_at).toLocaleString('ru-RU')}</time></div></article>)}</div>:<div className="empty"><History size={42}/><b>История пока пуста</b><span>Изменения появятся здесь автоматически.</span></div>}</section>;
 }
 function EmployeeManagement({user,stores,onChanged}){
   const [employees,setEmployees]=useState([]);
@@ -2163,7 +2163,6 @@ const {error}=await supabase
   };
   return (
     <section className="page">
-      <h2>Профиль</h2>
 
       <div className="profile">
         <UserRound size={42}/>
@@ -2317,6 +2316,7 @@ const {error}=await supabase
         <LogOut/>
         ВЫЙТИ
       </button>
+
     </section>
   );
 }
