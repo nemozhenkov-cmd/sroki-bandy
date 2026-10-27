@@ -1484,3 +1484,20 @@ svg {
 .item .pending-mark { position:absolute; right:10px; top:10px; margin:0; }
 .offline-buttons { display:grid; grid-template-columns:minmax(0,1fr) auto; }
 .offline-buttons .secondary { width:auto; }
+
+/* Compact recommendations and an in-place detail dialog. */
+.recommendation-list{gap:9px}
+.recommendation-card{display:block;width:100%;text-align:left;background:#fff;color:#151515;padding:12px 14px;border-radius:14px;box-shadow:none;font:inherit}
+.recommendation-card:hover{border-color:#b8b8ad}
+.recommendation-card:focus-visible{outline:3px solid #ffd400;outline-offset:2px}
+.recommendation-product{display:block;font-size:15px;line-height:1.35;margin-bottom:8px;overflow-wrap:anywhere}
+.recommendation-summary{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 12px;font-size:12px}
+.recommendation-summary>b{font-size:14px}
+.recommendation-summary>span{display:flex;align-items:center;gap:3px;color:var(--muted)}
+.recommendation-modal{align-items:center;padding:16px;z-index:50}
+.recommendation-dialog{max-width:420px;border-radius:22px;padding:20px;max-height:calc(100dvh - 32px)}
+.recommendation-dialog:before{display:none}
+.recommendation-dialog h2{font-size:18px;overflow-wrap:anywhere}
+.recommendation-dialog .sheethead{align-items:flex-start}
+.recommendation-dialog .recommendation-info b{overflow-wrap:anywhere}
+.recommendation-note{background:#fff6c5;border-radius:12px;padding:12px;font-size:13px;line-height:1.5;margin:18px 0}

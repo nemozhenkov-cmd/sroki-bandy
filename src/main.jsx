@@ -353,37 +353,8 @@ const visibleStores=user?.role==='admin'
       Товары из других магазинов с ближайшим сроком годности.
     </p>
 
-    <div className="recommendation-list">
-      {recommendations.map((item,index)=>(
-        <div className="recommendation-card" key={index}>
+    <RecommendationList items={recommendations}/>
 
-          <div className="recommendation-product">
-            {item.product_name}
-          </div>
-
-          {item.brand&&(
-            <div className="recommendation-brand">
-              {item.brand}
-            </div>
-          )}
-
-          <div className="recommendation-info">
-            <span>Срок годности</span>
-            <b>
-              {item.expiry_date.split('-').reverse().join('.')}
-            </b>
-          </div>
-
-          <div className="recommendation-info">
-            <span>Магазин</span>
-            <b>
-              {item.store_names.join(', ')}
-            </b>
-          </div>
-
-        </div>
-      ))}
-    </div>
 
   </section>
 )}
@@ -403,6 +374,41 @@ const visibleStores=user?.role==='admin'
 {error&&<div className="toast">{error}<X onClick={()=>setError('')}/></div>}
 </div>
  );
+}
+function RecommendationList({items}){
+ const [selected,setSelected]=useState(null);
+ const dialogRef=useRef(null),triggerRef=useRef(null);
+ useEffect(()=>{
+  if(!selected)return;
+  const previousOverflow=document.body.style.overflow;
+  document.body.style.overflow='hidden';
+  const dialog=dialogRef.current;dialog.querySelector('button').focus();
+  const key=e=>{
+   if(e.key==='Escape')setSelected(null);
+   if(e.key==='Tab'){
+    const buttons=dialog.querySelectorAll('button');const first=buttons[0],last=buttons[buttons.length-1];
+    if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}
+    else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
+   }
+  };
+  document.addEventListener('keydown',key);
+  return ()=>{document.body.style.overflow=previousOverflow;document.removeEventListener('keydown',key);triggerRef.current?.focus()};
+ },[selected]);
+ const names=item=>[...new Set((item.store_names||[]).filter(Boolean))];
+ return <><div className="recommendation-list">{items.map((item,index)=>{
+  const count=names(item).length;
+  return <button type="button" className="recommendation-card" key={index} aria-haspopup="dialog" onClick={e=>{triggerRef.current=e.currentTarget;setSelected(item)}}>
+   <span className="recommendation-product">{item.product_name}</span>
+   <span className="recommendation-summary"><b>Годен до {fmt(item.expiry_date)}</b><span>В {count} {plural(count,['магазине','магазинах','магазинах'])}<ChevronRight size={16} aria-hidden="true"/></span></span>
+  </button>
+ })}</div>{selected&&<div className="modal recommendation-modal" onClick={e=>{if(e.target===e.currentTarget)setSelected(null)}}><div className="dialog recommendation-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="recommendation-title">
+  <div className="sheethead"><h2 id="recommendation-title">{selected.product_name}</h2><button type="button" className="close-button" aria-label="Закрыть" onClick={()=>setSelected(null)}><X/></button></div>
+  {selected.brand&&<p className="recommendation-brand">{selected.brand}</p>}
+  <div className="recommendation-info"><span>Годен до</span><b>{fmt(selected.expiry_date)}</b></div>
+  <div className="recommendation-info"><span>Найден в других магазинах</span><b>{names(selected).join(', ')||'Нет данных'}</b></div>
+  <p className="recommendation-note">Проверьте наличие этого товара и срок на упаковке в вашем магазине.</p>
+  <button type="button" className="primary" onClick={()=>setSelected(null)}>Понятно</button>
+ </div></div>}</>;
 }
 function Splash(){return <LoadingScreen/>;}function Setup(){return <div className="center"><h1>КОНТРОЛЬ СГ</h1><p>Добавьте VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY в .env</p></div>}
 function Auth(){
