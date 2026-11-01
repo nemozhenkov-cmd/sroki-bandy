@@ -2175,7 +2175,7 @@ const {error}=await supabase
         <small>{session.user.email}</small>
       </div>
 
-      <PushSettings supabase={supabase} userId={session.user.id}/>
+      <PushSettings supabase={supabase} userId={session.user.id} userRole={user.role}/>
       <div className="profile-note"><Mascot/><b>Сроки под контролем!</b></div>
       {user.role==='admin' && (
         <>

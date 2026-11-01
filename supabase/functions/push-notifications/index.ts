@@ -1,3 +1,4 @@
+import { dispatchRegistrations } from './registration-dispatch.mjs';
 import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
 import webpush from 'npm:web-push@3.6.7';
 import { APP_URL, validSubscription, moscowDay, dispatchSlot, tomorrow, countsFor, notificationBody } from './policy.mjs';
@@ -85,6 +86,12 @@ Deno.serve(async request => {
     const body = JSON.parse(raw || '{}');
     const token = (request.headers.get('Authorization') || '').replace(/^Bearer /,'');
     if(!token) return reply(401,{error:'Требуется вход в приложение.'});
+    if(body.action === 'registrations') {
+      const config = await settings();
+      if(token !== config.cron_token) return reply(401,{error:'Unauthorized'});
+      if(body.user_id !== undefined && (typeof body.user_id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.user_id))) return reply(400,{error:'Invalid event'});
+      return reply(200,await dispatchRegistrations({db,config,send,validSubscription,userId:body.user_id}));
+    }
     if(body.action === 'dispatch') {
       const config = await settings();
       if(token !== config.cron_token) return reply(401,{error:'Unauthorized'});

@@ -1,7 +1,7 @@
 import React,{useEffect,useState} from 'react';
 import {pushSupport,pushRegistration,pushRequest,disablePush,publicKeyBytes} from './push-client.mjs';
 
-export default function PushSettings({supabase,userId}) {
+export default function PushSettings({supabase,userId,userRole}) {
   const [enabled,setEnabled] = useState(false);
   const [busy,setBusy] = useState(false);
   const [checking,setChecking] = useState(true);
@@ -47,8 +47,8 @@ export default function PushSettings({supabase,userId}) {
   };
   return <section className="push-settings" aria-labelledby="push-title">
     <h3 id="push-title">Уведомления на телефон</h3>
-    <p>Ежедневно в 08:30 и 18:30 по Москве: товары, которые нужно списать сегодня, и просроченные. Если таких товаров нет, уведомление не придёт.</p>
-    <p>Уведомления относятся к доступным вам магазинам и включаются отдельно на каждом устройстве.</p>
+    {userRole==='admin'?<p>О новых сотрудниках сразу после завершения регистрации и выбора магазина. В уведомлении — имя сотрудника и магазин. Напоминания о товарах администратору не отправляются.</p>:<p>Ежедневно в 08:30 и 18:30 по Москве: товары, которые нужно списать сегодня, и просроченные. Если таких товаров нет, уведомление не придёт.</p>}
+    <p>{userRole==='admin'?'Включаются отдельно на каждом устройстве администратора.':'Уведомления относятся к доступным вам магазинам и включаются отдельно на каждом устройстве.'}</p>
     {!supported ? <p>Добавьте приложение на главный экран и откройте его оттуда. На iPhone требуется iOS 16.4 или новее. Если кнопка не появилась, проверьте поддержку уведомлений в браузере.</p> : <>
       <p><b>{checking ? 'Проверяем подключение…' : enabled ? 'Включены на этом устройстве' : 'Выключены на этом устройстве'}</b></p>
       {Notification.permission === 'denied' && <p>Уведомления заблокированы. Разрешите их в настройках телефона или браузера, затем вернитесь в приложение.</p>}

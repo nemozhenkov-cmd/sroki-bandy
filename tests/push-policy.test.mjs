@@ -23,7 +23,7 @@ test('matches app thresholds and excludes disposed items, inactive stores and ot
   const stores=[{id:'a',is_active:true},{id:'b',is_active:true},{id:'c',is_active:false}];
   const items=[{store_id:'a',expiry_date:'2026-10-23'},{store_id:'a',expiry_date:'2026-10-24'},{store_id:'a',expiry_date:'2026-10-25'},{store_id:'a',expiry_date:'2026-10-26'},{store_id:'a',expiry_date:'2026-10-24',is_disposed:true},{store_id:'b',expiry_date:'2026-10-25'},{store_id:'c',expiry_date:'2026-10-24'}];
   assert.deepEqual(countsFor({role:'manager',store_id:'a'},stores,items,'2026-10-24'),{expired:2,today:1});
-  assert.deepEqual(countsFor({role:'admin'},stores,items,'2026-10-24'),{expired:2,today:2});
+  assert.deepEqual(countsFor({role:'admin'},stores,items,'2026-10-24'),{expired:0,today:0});
   assert.deepEqual(countsFor({role:'tm'},stores,items,'2026-10-24'),{expired:2,today:2});
   assert.deepEqual(countsFor({role:'unknown',store_id:'a'},stores,items,'2026-10-24'),{expired:0,today:0});
 });
