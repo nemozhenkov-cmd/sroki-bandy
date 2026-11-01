@@ -1,3 +1,4 @@
+import { staffPushStatus } from './staff-status.mjs';
 import { dispatchTasks } from './task-policy.mjs';
 import { dispatchRegistrations } from './registration-dispatch.mjs';
 import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
@@ -110,6 +111,14 @@ Deno.serve(async request => {
     }
     const {data:{user},error} = await db.auth.getUser(token);
     if(error || !user) return reply(401,{error:'Сессия истекла. Войдите снова.'});
+    if(body.action === 'staff-push-status') {
+      const actor=checked(await db.from('users').select('id,role,store_id').eq('id',user.id).maybeSingle());
+      if(actor?.role!=='manager'||!actor.store_id)return reply(403,{error:'Доступно только управляющему своего магазина.'});
+      const staff=await allRows('users','id,role,store_id',q=>q.eq('store_id',actor.store_id).in('role',['rtz','srtz','srtz_rtz']));
+      const ids=staff.map(x=>x.id);
+      const subscriptions=ids.length?await allRows('push_subscriptions','id,user_id',q=>q.in('user_id',ids)):[];
+      return reply(200,{staff:staffPushStatus(actor,staff,subscriptions)});
+    }
     if(body.action === 'task-user-snooze') {
       if(!Number.isInteger(body.task_id)||body.task_id<1||body.task_id>14||typeof body.day!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(body.day)) return reply(400,{error:'Проверьте задачу и дату.'});
       const {data,error}=await db.rpc('snooze_store_task_for_user',{p_user:user.id,p_task_id:body.task_id,p_day:body.day});
