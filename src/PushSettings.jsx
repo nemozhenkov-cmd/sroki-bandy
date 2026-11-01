@@ -1,5 +1,5 @@
 import React,{useEffect,useState} from 'react';
-import {pushSupport,pushRegistration,pushRequest,disablePush,publicKeyBytes} from './push-client.mjs';
+import {pushSupport,pushRegistration,pushRequest,disablePush,enablePush} from './push-client.mjs';
 
 export default function PushSettings({supabase,userId,userRole}) {
   const [enabled,setEnabled] = useState(false);
@@ -9,7 +9,7 @@ export default function PushSettings({supabase,userId,userRole}) {
   const supported = pushSupport();
   useEffect(()=>{
     let alive = true;
-    (async()=>{
+    const check=async()=>{
       try {
         if(!supported) return;
         const registration = await pushRegistration();
@@ -20,31 +20,19 @@ export default function PushSettings({supabase,userId,userRole}) {
         }
       } catch(e) { if(alive) setMessage(e.message); }
       finally { if(alive) setChecking(false); }
-    })();
-    return ()=>{alive=false;};
+    };check();window.addEventListener('push-settings-changed',check);
+    return ()=>{alive=false;window.removeEventListener('push-settings-changed',check)};
   },[supabase,userId,supported]);
   const run = async operation => {
     setBusy(true);setMessage('');
     try { await operation(); } catch(e) { setMessage(e.message); }
     finally { setBusy(false); }
   };
-  const enable = ()=>{
-    // Request permission immediately on the user's tap (required by iOS).
-    const permission = Notification.requestPermission();
-    run(async()=>{
-      if(await permission !== 'granted') throw new Error('Разрешите уведомления для приложения в настройках телефона или браузера.');
-      const registration = await pushRegistration();
-      const config = await pushRequest(supabase,'config');
-      let subscription = await registration.pushManager.getSubscription();
-      // A fresh subscription avoids carrying an endpoint across accounts on a shared device.
-      if(subscription) { await subscription.unsubscribe(); subscription=null; }
-      subscription = await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:publicKeyBytes(config.publicKey)});
-      try { await pushRequest(supabase,'subscribe',subscription); }
-      catch(e) { await subscription.unsubscribe(); throw e; }
-      setEnabled(true);
-      setMessage(config.enabled ? 'Уведомления включены на этом устройстве.' : 'Устройство подключено. Ежедневная отправка будет включена при публикации. Можно отправить проверку.');
-    });
-  };
+  const enable = ()=>run(async()=>{
+    const config=await enablePush(supabase);
+    setEnabled(true);
+    setMessage(config.enabled?'Уведомления включены на этом устройстве.':'Устройство подключено. Можно отправить проверку.');
+  });
   return <section className="push-settings" aria-labelledby="push-title">
     <h3 id="push-title">Уведомления на телефон</h3>
     {userRole==='admin'?<p>О новых сотрудниках сразу после завершения регистрации и выбора магазина. В уведомлении — имя сотрудника и магазин. Напоминания о товарах администратору не отправляются.</p>:<p>Ежедневно в 08:30 и 18:30 по Москве: товары, которые нужно списать сегодня, и просроченные. Если таких товаров нет, уведомление не придёт.</p>}

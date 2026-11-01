@@ -1,3 +1,4 @@
+import PushEnableRequest from './PushEnableRequest.jsx';
 import Profile from './Profile.jsx';
 import StoreTasks,{useStoreTasks} from './StoreTasks.jsx';
 import {clearTaskCache} from './task-core.mjs';
@@ -333,6 +334,7 @@ const visibleStores=user?.role==='admin'
 <header className={`app-header ${['profile','history','stats','tasks'].includes(tab)?'section-header':''}`}><Wordmark/>{tab==='profile'&&<h2>Профиль</h2>}{tab==='history'&&<h2>История</h2>}{tab==='stats'&&<h2>Статистика</h2>}{tab==='tasks'&&<h2>Задачи</h2>}</header>
  <OfflinePanel owner={user.id} online={online} cachedOnly={cachedOnly} storageError={storageError} refresh={{send:()=>sendQueue(supabase,user.id),load:async()=>{if(navigator.onLine)await loadData(user.id);else await restore(user.id)}}}/>
 
+ <PushEnableRequest supabase={supabase} user={user} online={online} visible={tab!=='add'&&!edit&&!scanner}/>
  {tab==='home'&&<><section className="home-hero"><div className="hero-copy"><h1>Сроки<br/>под контролем</h1><div className="store-picker"><MapPin size={18}/><select aria-label="Магазин" value={store} onChange={e=>setStore(e.target.value)}>{user.role==='admin'&&<option value="all">Все магазины</option>}{visibleStores.map(s=><option key={s.id} value={s.id}>{s.name}{!s.is_active?' · Неактивен':''}</option>)}</select><ChevronDown size={16}/></div></div><Mascot className="hero-mascot"/></section>{canReadRecommendations(user.role)&&recommendations.length>0&&(
   <button
     className="recommend-button"

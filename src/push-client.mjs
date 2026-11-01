@@ -31,3 +31,20 @@ export function publicKeyBytes(value) {
   const base64 = value.replace(/-/g,'+').replace(/_/g,'/');
   return Uint8Array.from(atob(base64.padEnd(Math.ceil(base64.length/4)*4,'=')),c=>c.charCodeAt(0));
 }
+
+// Call directly from a user gesture: iOS requires permission before any awaited work.
+export function enablePush(supabase) {
+  let permission;
+  try{permission=Notification.requestPermission()}catch(e){return Promise.reject(e)}
+  return (async()=>{
+    if(await permission!=='granted')throw new Error('Разрешите уведомления для приложения в настройках телефона или браузера.');
+    const registration=await pushRegistration();
+    const config=await pushRequest(supabase,'config');
+    let subscription=await registration.pushManager.getSubscription();
+    if(subscription){await subscription.unsubscribe();subscription=null;}
+    subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:publicKeyBytes(config.publicKey)});
+    try{await pushRequest(supabase,'subscribe',subscription)}catch(e){await subscription.unsubscribe();throw e;}
+    window.dispatchEvent(new Event('push-settings-changed'));
+    return config;
+  })();
+}

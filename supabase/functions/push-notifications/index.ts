@@ -117,7 +117,16 @@ Deno.serve(async request => {
       const staff=await allRows('users','id,role,store_id',q=>q.eq('store_id',actor.store_id).in('role',['rtz','srtz','srtz_rtz']));
       const ids=staff.map(x=>x.id);
       const subscriptions=ids.length?await allRows('push_subscriptions','id,user_id',q=>q.in('user_id',ids)):[];
-      return reply(200,{staff:staffPushStatus(actor,staff,subscriptions)});
+      const requests=checked(await db.rpc('manager_staff_push_requests',{p_actor:user.id}));
+      return reply(200,{staff:staffPushStatus(actor,staff,subscriptions,requests)});
+    }
+    if(['request-enable-push','my-push-request','snooze-push-request'].includes(body.action)) {
+      const uuid=(v:unknown)=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+      if(body.action==='request-enable-push'&&!uuid(body.user_id)||body.action==='snooze-push-request'&&!uuid(body.request_id))return reply(400,{error:'Проверьте сотрудника или запрос.'});
+      const rpc=body.action==='request-enable-push'?'manager_request_staff_push':body.action==='my-push-request'?'get_staff_push_request':'snooze_staff_push_request';
+      const args:any={p_actor:user.id};if(body.action==='request-enable-push')args.p_user=body.user_id;if(body.action==='snooze-push-request')args.p_request=body.request_id;
+      const {data,error}=await db.rpc(rpc,args);
+      return error?reply(403,{error:'Запрос недоступен. Проверьте права и принадлежность сотрудника вашему магазину.'}):reply(200,{request:data});
     }
     if(body.action === 'task-user-snooze') {
       if(!Number.isInteger(body.task_id)||body.task_id<1||body.task_id>14||typeof body.day!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(body.day)) return reply(400,{error:'Проверьте задачу и дату.'});
