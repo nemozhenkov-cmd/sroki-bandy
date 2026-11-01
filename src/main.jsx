@@ -1,3 +1,5 @@
+import StoreStaff from './StoreStaff.jsx';
+import {roleLabel,canReadRecommendations} from './roles.mjs';
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {BrowserMultiFormatReader} from '@zxing/browser';
@@ -168,7 +170,7 @@ const performLoadData=async(uid,token)=>{
     try{const cached=await readOffline(uid);if(cached?.queue.length)setProducts([...(p||[]),...cached.queue.filter(x=>x.kind==='add').map(x=>x.row.products)])}catch{}
     setUser(u);
 
-    if(u && (u.role==='manager'||u.role==='srtz_rtz')){
+    if(u && canReadRecommendations(u.role)){
       supabase.rpc('get_store_recommendations')
         .then(({data,error})=>{
           if(error){
@@ -324,7 +326,7 @@ const visibleStores=user?.role==='admin'
 <header className={`app-header ${['profile','history','stats'].includes(tab)?'section-header':''}`}><Wordmark/>{tab==='profile'&&<><span className="header-version" data-build={__APP_VERSION__}>Версия {__APP_RELEASE__}</span><h2>Профиль</h2></>}{tab==='history'&&<h2>История</h2>}{tab==='stats'&&<h2>Статистика</h2>}</header>
  <OfflinePanel owner={user.id} online={online} cachedOnly={cachedOnly} storageError={storageError} refresh={{send:()=>sendQueue(supabase,user.id),load:async()=>{if(navigator.onLine)await loadData(user.id);else await restore(user.id)}}}/>
 
- {tab==='home'&&<><section className="home-hero"><div className="hero-copy"><h1>Сроки<br/>под контролем</h1><div className="store-picker"><MapPin size={18}/><select aria-label="Магазин" value={store} onChange={e=>setStore(e.target.value)}>{user.role==='admin'&&<option value="all">Все магазины</option>}{visibleStores.map(s=><option key={s.id} value={s.id}>{s.name}{!s.is_active?' · Неактивен':''}</option>)}</select><ChevronDown size={16}/></div></div><Mascot className="hero-mascot"/></section>{(user.role==='manager'||user.role==='srtz_rtz')&&recommendations.length>0&&(
+ {tab==='home'&&<><section className="home-hero"><div className="hero-copy"><h1>Сроки<br/>под контролем</h1><div className="store-picker"><MapPin size={18}/><select aria-label="Магазин" value={store} onChange={e=>setStore(e.target.value)}>{user.role==='admin'&&<option value="all">Все магазины</option>}{visibleStores.map(s=><option key={s.id} value={s.id}>{s.name}{!s.is_active?' · Неактивен':''}</option>)}</select><ChevronDown size={16}/></div></div><Mascot className="hero-mascot"/></section>{canReadRecommendations(user.role)&&recommendations.length>0&&(
   <button
     className="recommend-button"
     onClick={()=>setTab('recommendations')}
@@ -744,7 +746,7 @@ function Onboard({session,onDone}){
             id:session.user.id,
             name:cleanName,
             store_id:store,
-            role:'srtz_rtz'
+            role:'rtz'
           })
           .select()
           .single();
@@ -1559,7 +1561,7 @@ function Stats({items,stores,user}){
 
         <div>
           <b>{filtered.filter(x=>statusFor(x.expiry_date)==='soon').length}</b>
-          <span>От 2 до 3 дней</span>
+          <span>От 2 до 7 дней</span>
         </div>
 
         <div>
@@ -1784,9 +1786,7 @@ function EmployeeManagement({user,stores,onChanged}){
             Все роли
           </option>
 
-          <option value="srtz_rtz">
-            СРТЗ / РТЗ
-          </option>
+          <option value="rtz">РТЗ</option><option value="srtz">СРТЗ</option>
 
           <option value="manager">
             Управляющие
@@ -1937,13 +1937,7 @@ function EmployeeManagement({user,stores,onChanged}){
 
                 <div className="muted">
 
-                  {employee.role==='admin'
-                    ?'Администратор'
-                    :employee.role==='tm'
-                      ?'Территориальный менеджер'
-                      :employee.role==='manager'
-                        ?'Управляющий магазина'
-                        :'СРТЗ / РТЗ'
+                  {roleLabel(employee.role)
                   }
 
                   {employee.store_id && (
@@ -1996,9 +1990,7 @@ function EmployeeManagement({user,stores,onChanged}){
                     }}
                   >
 
-                    <option value="srtz_rtz">
-                      СРТЗ / РТЗ
-                    </option>
+                    <option value="rtz">РТЗ</option><option value="srtz">СРТЗ</option>
 
                     <option value="manager">
                       Управляющий магазина
@@ -2167,13 +2159,7 @@ const {error}=await supabase
         <b>{user.name}</b>
 
         <span>
-          {user.role==='admin'
-            ?'Администратор'
-            :user.role==='tm'
-              ?'Территориальный менеджер'
-              :user.role==='manager'
-                ?'Управляющий магазина'
-                :'СРТЗ / РТЗ'
+          {roleLabel(user.role)
           }
           {user.role!=='tm' &&
   user.role!=='admin' &&
@@ -2298,6 +2284,7 @@ const {error}=await supabase
           {msg&&<p className="msg">{msg}</p>}
         </>
       )}
+{user.role==='manager'&&<StoreStaff supabase={supabase} user={user}/>}
 {user.role==='admin' && (
   <EmployeeManagement
     user={user}

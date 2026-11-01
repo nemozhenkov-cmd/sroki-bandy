@@ -23,7 +23,7 @@ export function tomorrow(date) {
 }
 export function countsFor(user, stores, items, date) {
   const ids = new Set(stores.filter(s=>s.is_active && (['admin','tm'].includes(user.role) || s.id === user.store_id)).map(s=>s.id));
-  if (!['admin','tm','manager','srtz_rtz'].includes(user.role)) return {expired:0,today:0};
+  if (!['admin','tm','manager','srtz_rtz','rtz','srtz'].includes(user.role)) return {expired:0,today:0};
   const next = tomorrow(date);
   return items.reduce((n,item)=> {
     if (!ids.has(item.store_id) || item.is_disposed) return n;
