@@ -76,24 +76,35 @@ self.addEventListener('fetch', event => {
   );
 });
 
-// Always show a visible notification, including when the application is closed.
+// Task capabilities are scoped server-side to one assigned task/day/device.
 self.addEventListener('push', event => {
-  let payload = {};
-  try { payload = event.data?.json() || {}; } catch { /* Fall back to a generic visible notice. */ }
-  event.waitUntil(self.registration.showNotification(
-    typeof payload.title === 'string' ? payload.title.slice(0,100) : 'Сроки годности',
-    {body:typeof payload.body === 'string' ? payload.body.slice(0,500) : 'Проверьте товары в приложении.',
-     tag:typeof payload.tag === 'string' ? payload.tag.slice(0,100) : 'expiry-summary',
-     icon:BASE+'icon-192.png',data:{url:BASE}}
-  ));
+ let payload={};try{payload=event.data?.json()||{}}catch{}
+ const task=payload.type==='store-task'&&Number.isInteger(payload.task?.id)&&payload.task.id>=1&&payload.task.id<=14&&/^\d{4}-\d{2}-\d{2}$/.test(payload.task?.day||'')&&/^[0-9a-f]{64}$/i.test(payload.task?.token||'')?payload.task:null;
+ const options={body:typeof payload.body==='string'?payload.body.slice(0,500):'Откройте приложение, чтобы проверить данные.',tag:typeof payload.tag==='string'?payload.tag.slice(0,100):'expiry-summary',icon:BASE+'icon-192.png',data:{url:BASE,...(task?{task}:{})}};
+ if(task)options.actions=[{action:'task-done',title:'Выполнено'},{action:'task-snooze',title:'Отложить'}];
+ event.waitUntil(self.registration.showNotification(typeof payload.title==='string'?payload.title.slice(0,100):'Сроки годности',options));
 });
-self.addEventListener('notificationclick', event => {
-  event.notification.close();
-  event.waitUntil((async()=>{
-    const url = new URL(BASE,self.location.origin).href;
-    const windows = await self.clients.matchAll({type:'window',includeUncontrolled:true});
-    const existing = windows.find(client=>client.url.startsWith(url));
-    if(existing) return existing.focus();
-    return self.clients.openWindow(url);
-  })());
+self.addEventListener('notificationclick',event=>{
+ event.notification.close();
+ event.waitUntil((async()=>{
+  const task=event.notification.data?.task;
+  let path=BASE;
+  if(task&&Number.isInteger(task.id)&&task.id>=1&&task.id<=14&&/^\d{4}-\d{2}-\d{2}$/.test(task.day||''))path+=`?view=tasks&task=${task.id}&day=${task.day}`;
+  if(task&&['task-done','task-snooze'].includes(event.action)&&/^[0-9a-f]{64}$/i.test(task.token||'')){
+   try{
+    const response=await fetch('https://sbsekvjjpxjpdootbsjt.supabase.co/functions/v1/push-notifications',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'task-notification-action',operation:event.action==='task-done'?'done':'snooze',token:task.token}),signal:AbortSignal.timeout(12000)});
+    if(!response.ok)throw Error('Task action failed');const result=await response.json();
+    const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});
+    for(const client of windows)if(client.url.startsWith(new URL(BASE,self.location.origin).href))client.postMessage({type:'STORE_TASKS_CHANGED'});
+    if(result.status==='done'||result.status==='snoozed')return;
+   }catch{
+    await self.registration.showNotification('Действие не подтверждено',{body:'Откройте задачи и проверьте интернет. Повторите действие в приложении.',icon:BASE+'icon-192.png',tag:'task-action-error',data:{url:BASE,task}});
+   }
+  }
+  const url=new URL(path,self.location.origin).href;
+  const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});
+  const existing=windows.find(client=>client.url.startsWith(new URL(BASE,self.location.origin).href));
+  if(existing){if(task){existing.postMessage({type:'OPEN_STORE_TASKS',taskId:task.id});}return existing.focus();}
+  return self.clients.openWindow(url);
+ })());
 });

@@ -1,3 +1,4 @@
+import { dispatchTasks } from './task-policy.mjs';
 import { dispatchRegistrations } from './registration-dispatch.mjs';
 import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
 import webpush from 'npm:web-push@3.6.7';
@@ -85,7 +86,17 @@ Deno.serve(async request => {
     if(raw.length > 8192) return reply(413,{error:'Request too large'});
     const body = JSON.parse(raw || '{}');
     const token = (request.headers.get('Authorization') || '').replace(/^Bearer /,'');
+    if(body.action === 'task-notification-action') {
+      if(typeof body.token !== 'string' || !/^[0-9a-f]{64}$/i.test(body.token) || !['done','snooze'].includes(body.operation)) return reply(400,{error:'Недопустимое действие задачи.'});
+      const {data,error}=await db.rpc('apply_store_task_push_action',{p_token:body.token,p_action:body.operation});
+      return error?reply(403,{error:'Задача или назначение больше неактуальны. Откройте список задач.'}):reply(200,data);
+    }
     if(!token) return reply(401,{error:'Требуется вход в приложение.'});
+    if(body.action === 'tasks-dispatch') {
+      const config=await settings();
+      if(token!==config.cron_token) return reply(401,{error:'Unauthorized'});
+      return reply(200,await dispatchTasks({db,config,send,validSubscription}));
+    }
     if(body.action === 'registrations') {
       const config = await settings();
       if(token !== config.cron_token) return reply(401,{error:'Unauthorized'});
@@ -99,6 +110,11 @@ Deno.serve(async request => {
     }
     const {data:{user},error} = await db.auth.getUser(token);
     if(error || !user) return reply(401,{error:'Сессия истекла. Войдите снова.'});
+    if(body.action === 'task-user-snooze') {
+      if(!Number.isInteger(body.task_id)||body.task_id<1||body.task_id>14||typeof body.day!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(body.day)) return reply(400,{error:'Проверьте задачу и дату.'});
+      const {data,error}=await db.rpc('snooze_store_task_for_user',{p_user:user.id,p_task_id:body.task_id,p_day:body.day});
+      return error?reply(403,{error:'Для вас нет актуального напоминания по этой задаче.'}):reply(200,data);
+    }
     if(body.action === 'config') {
       const config = await settings();
       return reply(200,{publicKey:config.public_key,enabled:config.enabled});

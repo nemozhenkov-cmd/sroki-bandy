@@ -1,3 +1,5 @@
+import StoreTasks,{useStoreTasks,TaskSettings} from './StoreTasks.jsx';
+import {clearTaskCache} from './task-core.mjs';
 import StoreStaff from './StoreStaff.jsx';
 import {roleLabel,canReadRecommendations} from './roles.mjs';
 import React,{useEffect,useMemo,useRef,useState} from 'react';
@@ -34,6 +36,12 @@ const [recoveryMode,setRecoveryMode]=useState(
 const [confirmationMessage,setConfirmationMessage]=useState(false);
 const [recommendations,setRecommendations]=useState([]);
 const [online,setOnline]=useState(navigator.onLine),[storageError,setStorageError]=useState(''),[cachedOnly,setCachedOnly]=useState(false);
+const tasks=useStoreTasks(supabase,user,online);
+const [statsHistory,setStatsHistory]=useState(false);
+const [taskRequested,setTaskRequested]=useState(()=>new URLSearchParams(location.search).get('view')==='tasks');
+useEffect(()=>{const receive=e=>{if(e.data?.type==='STORE_TASKS_CHANGED')tasks.refresh();if(e.data?.type==='OPEN_STORE_TASKS'){tasks.refresh();setTaskRequested(true)}};navigator.serviceWorker?.addEventListener('message',receive);return()=>navigator.serviceWorker?.removeEventListener('message',receive)},[tasks.refresh]);
+useEffect(()=>{if(tasks.available&&taskRequested){setTab('tasks');setTaskRequested(false)}},[tasks.available,taskRequested]);
+useEffect(()=>{if(tab==='tasks'&&tasks.data&&!tasks.available)setTab('home')},[tab,tasks.available,tasks.data]);
 const accountRef=useRef(null),sessionRef=useRef(null),dataLoadsRef=useRef(new Map());
 const restore=async(uid,activate=false)=>{
  const state=await readOffline(uid);
@@ -323,7 +331,7 @@ const visibleStores=user?.role==='admin'
 
  return (
   <div className={`app ${tab === 'add' ? 'adding-product' : tab === 'home' ? 'home-screen' : ''}`}>
-<header className={`app-header ${['profile','history','stats'].includes(tab)?'section-header':''}`}><Wordmark/>{tab==='profile'&&<><span className="header-version" data-build={__APP_VERSION__}>Версия {__APP_RELEASE__}</span><h2>Профиль</h2></>}{tab==='history'&&<h2>История</h2>}{tab==='stats'&&<h2>Статистика</h2>}</header>
+<header className={`app-header ${['profile','history','stats','tasks'].includes(tab)?'section-header':''}`}><Wordmark/>{tab==='profile'&&<><span className="header-version" data-build={__APP_VERSION__}>Версия {__APP_RELEASE__}</span><h2>Профиль</h2></>}{tab==='history'&&<h2>История</h2>}{tab==='stats'&&<h2>Статистика</h2>}{tab==='tasks'&&<h2>Задачи</h2>}</header>
  <OfflinePanel owner={user.id} online={online} cachedOnly={cachedOnly} storageError={storageError} refresh={{send:()=>sendQueue(supabase,user.id),load:async()=>{if(navigator.onLine)await loadData(user.id);else await restore(user.id)}}}/>
 
  {tab==='home'&&<><section className="home-hero"><div className="hero-copy"><h1>Сроки<br/>под контролем</h1><div className="store-picker"><MapPin size={18}/><select aria-label="Магазин" value={store} onChange={e=>setStore(e.target.value)}>{user.role==='admin'&&<option value="all">Все магазины</option>}{visibleStores.map(s=><option key={s.id} value={s.id}>{s.name}{!s.is_active?' · Неактивен':''}</option>)}</select><ChevronDown size={16}/></div></div><Mascot className="hero-mascot"/></section>{canReadRecommendations(user.role)&&recommendations.length>0&&(
@@ -360,19 +368,20 @@ const visibleStores=user?.role==='admin'
 
   </section>
 )}
- {tab==='stats'&&!online&&<section className="page"><p>Для отчёта по общей базе подключитесь к интернету. Сохранённый список товаров доступен на главном экране.</p></section>}{tab==='stats'&&online&&<Stats
+ {tab==='tasks'&&tasks.available&&<StoreTasks tasks={tasks} user={user} online={online}/>}{tab==='stats'&&tasks.available&&<div className="task-stat-tabs"><button onClick={()=>setStatsHistory(false)} aria-pressed={!statsHistory}>Статистика</button><button onClick={()=>setStatsHistory(true)} aria-pressed={statsHistory}>История</button></div>}{tab==='stats'&&tasks.available&&statsHistory&&(online?<HistoryView/>:<section className="page">История доступна с интернетом.</section>)}{tab==='stats'&&(!tasks.available||!statsHistory)&&!online&&<section className="page"><p>Для отчёта по общей базе подключитесь к интернету. Сохранённый список товаров доступен на главном экране.</p></section>}{tab==='stats'&&(!tasks.available||!statsHistory)&&online&&<Stats
   items={items}
   stores={visibleStores}
   user={user}
 />} {tab==='history'&&(!online?<section className="page"><p>История общей базы доступна с интернетом. Неотправленные действия — в разделе «Подробнее» над списком.</p></section>:<HistoryView/>)} {tab==='profile'&&!online&&<section className="page"><p>{user.name}</p><p>Настройки профиля и магазинов доступны при подключении к интернету.</p></section>}{tab==='profile'&&online&&(
   <Profile
     user={user}
+    tasks={tasks}
     session={session}
     stores={stores}
     onStoresChanged={()=>loadData(user.id)}
-    onLogout={async()=>{if(await pendingCount(user.id))throw new Error('Сначала отправьте локальные изменения. Они ещё не сохранены в общей базе.');await disablePush(supabase);await clearOffline(user.id);accountRef.current=null;const r=await supabase.auth.signOut();if(r.error)throw r.error;setUser(null);setItems([]);}}
+    onLogout={async()=>{if(await pendingCount(user.id))throw new Error('Сначала отправьте локальные изменения. Они ещё не сохранены в общей базе.');await disablePush(supabase);await clearOffline(user.id);clearTaskCache(user.id);accountRef.current=null;const r=await supabase.auth.signOut();if(r.error)throw r.error;setUser(null);setItems([]);}}
   />
-)}<nav aria-label="Основная навигация"><button className={tab==='home'?'sel':''} onClick={()=>setTab('home')}><List/>Список</button><button className={tab==='stats'?'sel':''} onClick={()=>setTab('stats')}><BarChart3/>Статистика</button><button className="add" aria-label="Добавить товар" onClick={()=>setTab('add')}><Plus/></button><button className={tab==='history'?'sel':''} onClick={()=>setTab('history')}><History/>История</button><button className={tab==='profile'?'sel':''} onClick={()=>setTab('profile')}><UserRound/>Профиль</button></nav>{edit&&<Edit x={edit} onCommit={commit} disposeOnly={disposeOnly} stores={visibleStores} onClose={()=>setEdit(null)} onSaved={()=>{loadData(user.id);setEdit(null)}}/>}
+)}<nav aria-label="Основная навигация"><button className={tab==='home'?'sel':''} onClick={()=>setTab('home')}><List/>Список</button><button className={tab==='stats'?'sel':''} onClick={()=>setTab('stats')}><BarChart3/>Статистика</button><button className="add" aria-label="Добавить товар" onClick={()=>setTab('add')}><Plus/></button><button className={tab===(tasks.available?'tasks':'history')?'sel':''} onClick={()=>setTab(tasks.available?'tasks':'history')}>{tasks.available?<PackageCheck/>:<History/>}{tasks.available?'Задачи':'История'}</button><button className={tab==='profile'?'sel':''} onClick={()=>setTab('profile')}><UserRound/>Профиль</button></nav>{edit&&<Edit x={edit} onCommit={commit} disposeOnly={disposeOnly} stores={visibleStores} onClose={()=>setEdit(null)} onSaved={()=>{loadData(user.id);setEdit(null)}}/>}
 {error&&<div className="toast">{error}<X onClick={()=>setError('')}/></div>}
 </div>
  );
@@ -2074,7 +2083,7 @@ function EmployeeManagement({user,stores,onChanged}){
     </div>
   );
 }
-function Profile({user,session,stores,onStoresChanged,onLogout}){
+function Profile({user,session,stores,onStoresChanged,onLogout,tasks}){
   const [busy,setBusy]=useState(null);
   const [msg,setMsg]=useState('');
   const [showAddStore,setShowAddStore]=useState(false);
@@ -2175,6 +2184,7 @@ const {error}=await supabase
         <small>{session.user.email}</small>
       </div>
 
+      {user.role==='manager'&&<TaskSettings tasks={tasks} db={supabase} user={user}/>}
       <PushSettings supabase={supabase} userId={session.user.id} userRole={user.role}/>
       <div className="profile-note"><Mascot/><b>Сроки под контролем!</b></div>
       {user.role==='admin' && (
