@@ -15,7 +15,7 @@ self.addEventListener('install', event => {
     const assets=[...html.matchAll(/(?:src|href)=["']([^"']+\.(?:js|css))["']/g)].map(m=>new URL(m[1],self.location.origin+BASE).href).filter(url=>url.startsWith(self.location.origin+BASE));
     if(!assets.some(url=>url.endsWith('.js')))throw new Error('Application script missing');
     // Install only succeeds when the complete application is available offline.
-    await cache.addAll([...assets,`${BASE}manifest.webmanifest`,`${BASE}brand/mascot-loading.webp`,`${BASE}brand/mascot-welcome.webp`,`${BASE}brand/mascot-update.webp`,`${BASE}brand/mascot-scenes.webp`,`${BASE}icon-192.png`]);
+    await cache.addAll([...assets,`${BASE}manifest.webmanifest`,`${BASE}brand/mascot-loading.webp`,`${BASE}brand/mascot-welcome.webp`,`${BASE}brand/mascot-update.webp`,`${BASE}brand/mascot-scenes.webp`,`${BASE}brand/mascot-success.webp`,`${BASE}icon-192.png`]);
     await cache.put(BASE,response.clone());
     await cache.put(`${BASE}index.html`,response);
   })());

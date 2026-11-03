@@ -17,6 +17,7 @@ test('offline installation precaches the actual script, stylesheet and all masco
  assert.ok(w.assets.includes('https://example.test/sroki-bandy/assets/style-123.css'));
  assert.ok(w.assets.includes('/sroki-bandy/brand/mascot-welcome.webp'));
  assert.ok(w.assets.includes('/sroki-bandy/brand/mascot-scenes.webp'));
+ assert.ok(w.assets.includes('/sroki-bandy/brand/mascot-success.webp'));
  assert.deepEqual(w.pages,['/sroki-bandy/','/sroki-bandy/index.html']);
 });
 test('missing script or incomplete download prevents activation of an incomplete offline shell',async()=>{
