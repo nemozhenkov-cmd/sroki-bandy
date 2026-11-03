@@ -2,7 +2,7 @@ import React from 'react';
 import {RefreshCw} from 'lucide-react';
 
 export function Wordmark(){return <div className="wordmark" aria-label="Чижик">Чижик</div>;}
-export function Mascot({pose='welcome',className=''}){return <img className={`mascot ${className}`} src={`${import.meta.env.BASE_URL}brand/mascot-${pose}.webp`} width="320" height="320" alt="" draggable="false"/>;}
+export function Mascot({pose='welcome',className=''}){if(['list','stats','tasks','profile','add'].includes(pose))return <span aria-hidden="true" style={{backgroundImage:`url(${import.meta.env.BASE_URL}brand/mascot-scenes.webp)`}} className={`mascot mascot-scene scene-${pose} ${className}`}/>;return <img className={`mascot ${className}`} src={`${import.meta.env.BASE_URL}brand/mascot-${pose}.webp`} width="320" height="320" alt="" draggable="false"/>;}
 export function LoadingScreen(){return <main className="status-screen splash"><Wordmark/><Mascot pose="loading"/><h1>Загружаем<br/>приложение</h1><p>Проверяем подключение<br/>и получаем данные</p><div className="loading-dots" role="status" aria-label="Загрузка"><i/><i/><i/></div><small>Контроль сроков годности</small></main>;}
 export function UpdateScreen({onApply,error}){return <div className="update-overlay"><section className="status-screen update-screen" role="dialog" aria-modal="true" aria-labelledby="update-title"><Wordmark/><Mascot pose="update"/><h1 id="update-title">Есть обновление</h1><p>Новая версия готова к установке</p><div className="update-info"><RefreshCw/><div><b>Обновим приложение</b><span>После установки оно откроется заново</span></div></div>{error&&<p className="msg" role="alert">{error}</p>}<button className="primary" onClick={onApply}>Обновить приложение</button></section></div>;}
 

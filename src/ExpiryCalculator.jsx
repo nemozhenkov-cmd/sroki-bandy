@@ -1,3 +1,6 @@
+import React from 'react';
+import {Calculator} from 'lucide-react';
+import AppDialog from './AppDialog.jsx';
 import {useState} from 'react';
 import {calculateExpiry, localDate} from './expiry-date.mjs';
 
@@ -18,12 +21,9 @@ export default function ExpiryCalculator({onApply}) {
     setManufactured(`${nextYear}-${String(nextMonth).padStart(2,'0')}-${String(Math.min(Number(nextDay),lastDay)).padStart(2,'0')}`);
   };
 
-  return <div className="expiry-tools">
-    <div className="expiry-mode" role="group" aria-label="Способ ввода срока годности">
-      <button type="button" aria-pressed={!open} onClick={()=>setOpen(false)}>Вручную</button>
-      <button type="button" aria-pressed={open} onClick={()=>setOpen(true)}>Калькулятор</button>
-    </div>
-    {open&&<div className="expiry-calculator">
+  return <div className="expiry-tools compact-expiry-tools">
+    <button type="button" className="calculator-trigger" onClick={()=>setOpen(true)}><Calculator size={16}/>Рассчитать</button>
+    {open&&<AppDialog title="Калькулятор срока" onClose={()=>setOpen(false)} className="calculator-overlay"><div className="expiry-calculator">
       <div>
         <div className="expiry-date-label">Дата изготовления</div>
         <div className="expiry-manufactured-date" role="group" aria-label="Дата изготовления">
@@ -51,8 +51,8 @@ export default function ExpiryCalculator({onApply}) {
         </label>
       </div>
       <p role="status">{expiry?`Годен до: ${formatted}`:'Укажите дату изготовления и целый положительный срок.'}</p>
-      <button type="button" className="primary" disabled={!expiry} onClick={()=>{onApply(expiry);setOpen(false)}}>ПОДСТАВИТЬ ДАТУ</button>
+      <button type="button" className="primary" disabled={!expiry} onClick={()=>{onApply(expiry);setOpen(false)}}>{expiry?`Применить: годен до ${formatted}`:'Укажите срок годности'}</button>
       <small>К дате изготовления прибавляется полный срок. Полученная дата — первый день, когда товар уже просрочен. Проверьте результат по маркировке товара.</small>
-    </div>}
+    </div></AppDialog>}
   </div>;
 }

@@ -6,7 +6,7 @@ import StoreStaff from './StoreStaff.jsx';
 import EmployeeManagement from './EmployeeManagement.jsx';
 import PushSettings from './PushSettings.jsx';
 import {TaskSettings} from './StoreTasks.jsx';
-export default function Profile({user,session,stores,onStoresChanged,onLogout,tasks,supabase}){
+export default function Profile({user,session,stores,onStoresChanged,onLogout,tasks,supabase,initialSection='home'}){
   const [busy,setBusy]=useState(null);
   const [msg,setMsg]=useState('');
   const [showAddStore,setShowAddStore]=useState(false);
@@ -197,5 +197,5 @@ const {error}=await supabase
    help:()=> <div className="profile-help"><div className="profile-info-card"><h3>Нужна помощь?</h3><p>{user.role==='manager'?'Если не получается решить вопрос, обратитесь к автору приложения.':user.role==='admin'?'По вопросам работы приложения обратитесь к его автору.':'По вопросам работы приложения обратитесь к управляющему вашего магазина.'}</p></div><div className="profile-info-card"><h3>Уведомления не приходят</h3><p>Откройте «Мои уведомления», включите их и отправьте проверку. Проверьте разрешения в настройках телефона.</p><p>На iPhone приложение нужно добавить на главный экран и открывать оттуда.</p></div><div className="profile-info-card"><h3>Нет интернета</h3><p>Товары можно добавлять, изменять и списывать без сети. Когда связь появится, отправьте локальные изменения через панель над списком товаров.</p><p>Для изменения настроек и отметки выполнения задач нужен интернет.</p></div></div>,
    about:()=> <div className="profile-info-card profile-about"><Mascot/><h3>КСГ — Чижик</h3><p>Контроль сроков годности</p><span className="profile-status-pill" data-build={__APP_VERSION__}>Версия {__APP_RELEASE__}</span></div>
   };
-  return <ProfileHub user={user} email={session.user.email} stores={stores} tasks={tasks} db={supabase} sections={sections} error={msg} onLogout={async()=>{try{await onLogout()}catch(e){setMsg(e.message||'Не удалось выйти. Проверьте соединение и повторите.')}}}/>;
+  return <ProfileHub initialSection={initialSection} user={user} email={session.user.email} stores={stores} tasks={tasks} db={supabase} sections={sections} error={msg} onLogout={async()=>{try{await onLogout()}catch(e){setMsg(e.message||'Не удалось выйти. Проверьте соединение и повторите.')}}}/>;
 }

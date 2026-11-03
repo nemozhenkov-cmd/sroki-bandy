@@ -1,3 +1,4 @@
+import AddProduct from './AddProduct.jsx';
 import TeamActivity from './TeamActivity.jsx';
 import PushEnableRequest from './PushEnableRequest.jsx';
 import Profile from './Profile.jsx';
@@ -6,8 +7,6 @@ import {clearTaskCache} from './task-core.mjs';
 import {roleLabel,canReadRecommendations} from './roles.mjs';
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {BrowserMultiFormatReader} from '@zxing/browser';
-import {BarcodeFormat, DecodeHintType} from '@zxing/library';
 import {createClient} from '@supabase/supabase-js';
 import {Camera, Search, Plus, PackageCheck, AlertTriangle, Clock3, LogOut, History, BarChart3, UserRound, X, Check, Trash2, RefreshCw, MapPin, ChevronDown, ChevronRight, List, Pencil} from 'lucide-react';
 import './styles.css';
@@ -16,7 +15,6 @@ import {readOffline,rememberedOwner,cacheSnapshot,queueChange,sendQueue,pendingC
 import {ACTION_WIDTH,swipeIntent,swipeOffset,shouldOpen} from './swipe-gesture.mjs';
 import {Wordmark,Mascot,LoadingScreen,UpdateScreen,DateFields} from './Brand.jsx';
 import {daysLeft, statusFor} from './expiry-status.mjs';
-import ExpiryCalculator from './ExpiryCalculator.jsx';
 import {disablePush} from './push-client.mjs';
 import {withDeadline, queryWithDeadline} from './request-timeout.mjs';
 
@@ -36,6 +34,9 @@ const [recoveryMode,setRecoveryMode]=useState(
 );
 const [confirmationMessage,setConfirmationMessage]=useState(false);
 const [recommendations,setRecommendations]=useState([]);
+const [profileSection,setProfileSection]=useState('home');
+const [savedNotice,setSavedNotice]=useState('');
+useEffect(()=>{if(!savedNotice)return;const t=setTimeout(()=>setSavedNotice(''),4000);return()=>clearTimeout(t)},[savedNotice]);
 const [online,setOnline]=useState(navigator.onLine),[storageError,setStorageError]=useState(''),[cachedOnly,setCachedOnly]=useState(false);
 const tasks=useStoreTasks(supabase,user,online);
 const [taskRequested,setTaskRequested]=useState(()=>new URLSearchParams(location.search).get('view')==='tasks');
@@ -335,7 +336,7 @@ const visibleStores=user?.role==='admin'
  <OfflinePanel owner={user.id} online={online} cachedOnly={cachedOnly} storageError={storageError} refresh={{send:()=>sendQueue(supabase,user.id),load:async()=>{if(navigator.onLine)await loadData(user.id);else await restore(user.id)}}}/>
 
  <PushEnableRequest supabase={supabase} user={user} online={online} visible={tab!=='add'&&!edit&&!scanner}/>
- {tab==='home'&&<><section className="home-hero"><div className="hero-copy"><h1>Сроки<br/>под контролем</h1><div className="store-picker"><MapPin size={18}/><select aria-label="Магазин" value={store} onChange={e=>setStore(e.target.value)}>{user.role==='admin'&&<option value="all">Все магазины</option>}{visibleStores.map(s=><option key={s.id} value={s.id}>{s.name}{!s.is_active?' · Неактивен':''}</option>)}</select><ChevronDown size={16}/></div></div><Mascot className="hero-mascot"/></section>{canReadRecommendations(user.role)&&recommendations.length>0&&(
+ {tab==='home'&&<><section className="home-hero"><div className="hero-copy"><h1>Сроки<br/>под контролем</h1><div className="store-picker"><MapPin size={18}/><select aria-label="Магазин" value={store} onChange={e=>setStore(e.target.value)}>{user.role==='admin'&&<option value="all">Все магазины</option>}{visibleStores.map(s=><option key={s.id} value={s.id}>{s.name}{!s.is_active?' · Неактивен':''}</option>)}</select><ChevronDown size={16}/></div></div><Mascot pose="list" className="hero-mascot"/></section>{canReadRecommendations(user.role)&&recommendations.length>0&&(
   <button
     className="recommend-button"
     onClick={()=>setTab('recommendations')}
@@ -343,7 +344,7 @@ const visibleStores=user?.role==='admin'
     🟡 РЕКОМЕНДУЕМ ПРОВЕРИТЬ
   </button>
 )}<div className="stats"><Stat n={counts.expired} t="Просрочено" c="expired" selected={filter==='expired'} on={()=>setFilter('expired')}/><Stat n={counts.today} t="Списать сегодня" c="today" selected={filter==='today'} on={()=>setFilter('today')}/><Stat n={counts.soon} t="Скоро истекает" c="soon" selected={filter==='soon'} on={()=>setFilter('soon')}/><Stat n={counts.ok} t="В порядке" c="ok" selected={filter==='ok'} on={()=>setFilter('ok')}/></div><div className="search"><Search size={20}/><input value={q} onChange={e=>setQ(e.target.value)} aria-label="Поиск товара или штрихкода" placeholder="Название или штрихкод"/>{q&&<button className="search-clear" aria-label="Очистить поиск" onClick={()=>setQ('')}><X size={18}/></button>}</div><div className="list-head"><b>{filter==='all'?'Все товары':filter==='expired'?'Просрочено':filter==='today'?'Списать сегодня':filter==='soon'?'Скоро истекает':'В порядке'}</b><button onClick={()=>setFilter('all')}>Сбросить</button></div><div className="list">{filtered.length?<SwipeItems items={filtered} onEdit={x=>{setDisposeOnly(false);setEdit(x)}} onDispose={x=>{setDisposeOnly(true);setEdit(x)}}/>:<Empty/>}</div></>}
- {tab==='add'&&<Add stores={visibleStores} products={products} user={user} items={items} onCommit={commit} onClose={()=>setTab('home')} onSaved={()=>{loadData(user.id);setTab('home')}}/>}
+ {tab==='add'&&<AddProduct online={online} stores={visibleStores} products={products} user={user} items={items} onCommit={commit} onClose={()=>setTab('home')} onSaved={productName=>{loadData(user.id);setTab('home');setSavedNotice(`Добавлено: ${productName}`)}}/>}
 {tab==='recommendations'&&(
   <section className="recommendations">
 
@@ -369,8 +370,9 @@ const visibleStores=user?.role==='admin'
 
   </section>
 )}
- {tab==='tasks'&&tasks.available&&<StoreTasks tasks={tasks} user={user} online={online}/>}{(tab==='stats'||tab==='history')&&<TeamActivity supabase={supabase} user={user} stores={stores} online={online} initialView={tab==='history'?'history':'stats'}/>} {tab==='profile'&&!online&&<section className="page"><p>{user.name}</p><p>Настройки профиля и магазинов доступны при подключении к интернету.</p></section>}{tab==='profile'&&online&&(
+ {tab==='tasks'&&tasks.available&&<StoreTasks tasks={tasks} user={user} online={online} onManage={()=>{setProfileSection('tasks');setTab('profile')}}/>}{(tab==='stats'||tab==='history')&&<TeamActivity supabase={supabase} user={user} stores={stores} online={online} initialView={tab==='history'?'history':'stats'}/>} {tab==='profile'&&!online&&<section className="page"><p>{user.name}</p><p>Настройки профиля и магазинов доступны при подключении к интернету.</p></section>}{tab==='profile'&&online&&(
   <Profile
+    initialSection={profileSection}
     supabase={supabase}
     user={user}
     tasks={tasks}
@@ -379,8 +381,8 @@ const visibleStores=user?.role==='admin'
     onStoresChanged={()=>loadData(user.id)}
     onLogout={async()=>{if(await pendingCount(user.id))throw new Error('Сначала отправьте локальные изменения. Они ещё не сохранены в общей базе.');await disablePush(supabase);await clearOffline(user.id);clearTaskCache(user.id);accountRef.current=null;const r=await supabase.auth.signOut();if(r.error)throw r.error;setUser(null);setItems([]);}}
   />
-)}<nav aria-label="Основная навигация"><button className={tab==='home'?'sel':''} onClick={()=>setTab('home')}><List/>Список</button><button className={tab==='stats'?'sel':''} onClick={()=>setTab('stats')}><BarChart3/>Статистика</button><button className="add" aria-label="Добавить товар" onClick={()=>setTab('add')}><Plus/></button><button className={tab===(tasks.available?'tasks':'history')?'sel':''} onClick={()=>setTab(tasks.available?'tasks':'history')}>{tasks.available?<PackageCheck/>:<History/>}{tasks.available?'Задачи':'История'}</button><button className={tab==='profile'?'sel':''} onClick={()=>setTab('profile')}><UserRound/>Профиль</button></nav>{edit&&<Edit x={edit} onCommit={commit} disposeOnly={disposeOnly} stores={visibleStores} onClose={()=>setEdit(null)} onSaved={()=>{loadData(user.id);setEdit(null)}}/>}
-{error&&<div className="toast">{error}<X onClick={()=>setError('')}/></div>}
+)}<nav aria-label="Основная навигация"><button className={tab==='home'?'sel':''} onClick={()=>setTab('home')}><List/>Список</button><button className={tab==='stats'?'sel':''} onClick={()=>setTab('stats')}><BarChart3/>Статистика</button><button className="add" aria-label="Добавить товар" onClick={()=>setTab('add')}><Plus/></button><button className={tab===(tasks.available?'tasks':'history')?'sel':''} onClick={()=>setTab(tasks.available?'tasks':'history')}>{tasks.available?<PackageCheck/>:<History/>}{tasks.available?'Задачи':'История'}</button><button className={tab==='profile'?'sel':''} onClick={()=>{setProfileSection('home');setTab('profile')}}><UserRound/>Профиль</button></nav>{edit&&<Edit x={edit} onCommit={commit} disposeOnly={disposeOnly} stores={visibleStores} onClose={()=>setEdit(null)} onSaved={()=>{loadData(user.id);setEdit(null)}}/>}
+{savedNotice&&!error&&<div className="toast saved-toast" role="status">{savedNotice}<button aria-label="Закрыть сообщение" onClick={()=>setSavedNotice('')}><X size={18}/></button></div>}{error&&<div className="toast">{error}<X onClick={()=>setError('')}/></div>}
 </div>
  );
 }
@@ -861,590 +863,6 @@ function Item({x,onClick,gestureProps={},style}){
   </button>;
 }
 function Empty(){return <div className="empty"><Mascot/><b>Ничего не найдено</b><span>Попробуйте изменить фильтр<br/>или добавить товар.</span></div>;}
-function Add({stores,products,user,items,onCommit,onClose,onSaved}){
- const [barcode,setBarcode]=useState(''),
- [name,setName]=useState(''),
- [brand,setBrand]=useState(''),
- [expiry,setExpiry]=useState(localDate()),
- [qty,setQty]=useState(1),
- [store,setStore]=useState(user.store_id),
- [note,setNote]=useState(''),
- [busy,setBusy]=useState(false),
- [msg,setMsg]=useState(''),
- [duplicate,setDuplicate]=useState(null),
- [scanning,setScanning]=useState(false),
- videoRef=useRef(null),
- scannerRef=useRef(null);
-
- useEffect(
-  ()=>()=>{scannerRef.current?.stop?.();scannerRef.current?.reset?.();scannerRef.current=null},
-  []
- );
-
- const months=[
-  'Январь',
-  'Февраль',
-  'Март',
-  'Апрель',
-  'Май',
-  'Июнь',
-  'Июль',
-  'Август',
-  'Сентябрь',
-  'Октябрь',
-  'Ноябрь',
-  'Декабрь'
- ];
-
- const expiryParts=expiry
-  ? expiry.split('-')
-  : localDate().split('-');
-
- const expiryYear=expiryParts[0]||String(new Date().getFullYear());
- const expiryMonth=expiryParts[1]||String(new Date().getMonth()+1).padStart(2,'0');
- const expiryDay=expiryParts[2]||String(new Date().getDate()).padStart(2,'0');
-
- const daysInMonth=new Date(
-  Number(expiryYear),
-  Number(expiryMonth),
-  0
- ).getDate();
-
- const updateExpiry=(day,month,year)=>{
-  let d=Number(day);
-  const maxDay=new Date(
-   Number(year),
-   Number(month),
-   0
-  ).getDate();
-
-  if(d>maxDay)d=maxDay;
-
-  setExpiry(
-   `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`
-  );
- };
-
- const scan=async()=>{
-  setMsg('');
-
-  if(!window.isSecureContext){
-    setMsg('Камера доступна только через HTTPS или localhost.');
-    return;
-  }
-
-  if(!navigator.mediaDevices?.getUserMedia){
-    setMsg('Браузер не предоставляет доступ к камере. Используйте Chrome или Samsung Internet.');
-    return;
-  }
-
-  try{
-    try{scannerRef.current?.stop?.()}catch{}
-    try{scannerRef.current?.reset?.()}catch{}
-    scannerRef.current=null;
-
-    const hints=new Map();
-
-    hints.set(
-      DecodeHintType.POSSIBLE_FORMATS,
-      [
-        BarcodeFormat.EAN_13,
-        BarcodeFormat.EAN_8,
-        BarcodeFormat.UPC_A,
-        BarcodeFormat.UPC_E
-      ]
-    );
-
-    hints.set(DecodeHintType.TRY_HARDER,true);
-
-    const reader=new BrowserMultiFormatReader(hints);
-    scannerRef.current=reader;
-
-    setScanning(true);
-
-    await new Promise(resolve=>{
-      requestAnimationFrame(()=>{
-        requestAnimationFrame(resolve);
-      });
-    });
-
-    if(!videoRef.current){
-      throw new Error('Не удалось подготовить окно камеры.');
-    }
-
-    /*
-     * ГЛАВНОЕ:
-     * Сначала строго запрашиваем ЗАДНЮЮ камеру.
-     * exact: environment не позволяет браузеру
-     * самостоятельно выбрать фронтальную.
-     */
-    const rearConstraints={
-      audio:false,
-      video:{
-        facingMode:{
-          exact:'environment'
-        },
-        width:{
-          ideal:1280
-        },
-        height:{
-          ideal:720
-        }
-      }
-    };
-
-    let controls;
-
-    try{
-
-      controls=await reader.decodeFromConstraints(
-        rearConstraints,
-        videoRef.current,
-        (result,error)=>{
-          if(!result)return;
-
-          const code=result.getText().trim();
-          if(!code)return;
-
-          try{controls?.stop?.()}catch{}
-          try{reader.reset()}catch{}
-
-          scannerRef.current=null;
-          setScanning(false);
-          setBarcode(code);
-
-          find(code);
-        }
-      );
-
-    }catch(rearError){
-
-      console.warn(
-        'Не удалось открыть заднюю камеру через exact environment:',
-        rearError
-      );
-
-      /*
-       * Второй вариант.
-       *
-       * Получаем список камер и ищем только те,
-       * которые браузер помечает как задние.
-       */
-      let devices=[];
-
-      try{
-        devices=await navigator.mediaDevices.enumerateDevices();
-      }catch{}
-
-      const cameras=devices.filter(
-        device=>device.kind==='videoinput'
-      );
-
-      console.log('Камеры устройства:',cameras);
-
-      /*
-       * Никогда не берём камеру вслепую.
-       * Сначала ищем rear/back/environment.
-       */
-      const rearCamera=cameras.find(camera=>{
-        const label=(camera.label||'').toLowerCase();
-
-        return(
-          label.includes('back') ||
-          label.includes('rear') ||
-          label.includes('environment')
-        );
-      });
-
-      if(!rearCamera?.deviceId){
-        throw rearError;
-      }
-
-      controls=await reader.decodeFromConstraints(
-        {
-          audio:false,
-          video:{
-            deviceId:{
-              exact:rearCamera.deviceId
-            },
-            width:{
-              ideal:1280
-            },
-            height:{
-              ideal:720
-            }
-          }
-        },
-        videoRef.current,
-        (result,error)=>{
-          if(!result)return;
-
-          const code=result.getText().trim();
-          if(!code)return;
-
-          try{controls?.stop?.()}catch{}
-          try{reader.reset()}catch{}
-
-          scannerRef.current=null;
-          setScanning(false);
-          setBarcode(code);
-
-          find(code);
-        }
-      );
-    }
-
-    scannerRef.current=controls;
-
-  }catch(e){
-    console.error('Scanner error:',e);
-
-    try{scannerRef.current?.stop?.()}catch{}
-    try{scannerRef.current?.reset?.()}catch{}
-
-    scannerRef.current=null;
-    setScanning(false);
-
-    const m=e?.message||'';
-
-    if(
-      m.toLowerCase().includes('permission') ||
-      m.toLowerCase().includes('notallowed') ||
-      m.toLowerCase().includes('denied')
-    ){
-      setMsg(
-        'Нет доступа к камере. Разрешите камеру для этого сайта в настройках браузера.'
-      );
-    }else{
-      setMsg('Не удалось запустить камеру: '+m);
-    }
-  }
-};
- const find=async(rawCode)=>{
-  const code=String(rawCode||'').replace(/\D/g,'');
-  setBarcode(code);
-  setMsg('Ищем товар…');
-
-  const own=products.find(
-   p=>String(p.barcode||'').replace(/\D/g,'')===code
-  );
-
-  if(own){
-   setName(own.name||'');
-   setBrand(own.brand||'');
-   setMsg('Товар найден в нашей базе');
-   return;
-  }
-
-  if(!navigator.onLine){setName('');setBrand('');setMsg('Нет связи — введите название вручную.');return;}
-  setBusy(true);
-
-  try{
-   const r=await fetch(
-    `https://world.openfoodfacts.org/api/v3/product/${encodeURIComponent(code)}?fields=code,product_name,brands`,
-    {
-     headers:{
-      Accept:'application/json'
-     }
-    }
-   );
-
-   const j=await r.json();
-   const product=j?.product;
-   const productName=product?.product_name||'';
-   const brand=product?.brands||'';
-
-   if(productName.trim()){
-    setName(productName.trim());
-    setBrand(brand.trim());
-    setMsg('Товар найден в Open Food Facts');
-   }else{
-    setName('');
-    setBrand('');
-    setMsg('Товар не найден — введите название вручную');
-   }
-
-  }catch(error){
-   console.error('Open Food Facts error:',error);
-   setName('');
-   setBrand('');
-   setMsg('Не удалось выполнить поиск — введите название вручную');
-  }finally{
-   setBusy(false);
-  }
- };
-
-
-const makeRow=(id,product,quantity,old={})=>({...old,id,product_id:product.id,products:product,store_id:store,stores:stores.find(s=>s.id===store),expiry_date:expiry,quantity,note,created_by:old.created_by||user.id,updated_by:user.id,is_disposed:false,created:old.created||{name:user.name}});
-const save=async()=>{
- if(!barcode||!name.trim()||!expiry)return setMsg('Заполните штрихкод, название и срок.');
- if(!Number.isInteger(Number(qty))||Number(qty)<1||Number(qty)>2147483647)return setMsg('Количество должно быть целым числом от 1 до 2147483647.');
- if(!store)return setMsg('Выберите магазин.');
- const cleanBarcode=String(barcode).replace(/\D/g,'');
- if(!cleanBarcode)return setMsg('Укажите штрихкод цифрами.');
- const product=products.find(p=>String(p.barcode||'').replace(/\D/g,'')===cleanBarcode)||{id:crypto.randomUUID(),barcode:cleanBarcode,name:name.trim(),brand};
- const existing=items.find(x=>x.products?.barcode===cleanBarcode&&x.store_id===store&&x.expiry_date===expiry);
- if(existing){setDuplicate({id:existing.id,currentQuantity:Number(existing.quantity),newQuantity:Number(qty),name,expiry,note,product});return;}
- setBusy(true);setMsg('');
- try{await onCommit('add',makeRow(crypto.randomUUID(),product,Number(qty)));onSaved()}catch(e){setMsg(e.message)}finally{setBusy(false)}
-};
-const finishDuplicate=async(action)=>{
- if(!duplicate)return;
- if(action==='cancel'){setDuplicate(null);setMsg('');return;}
- const current=items.find(x=>x.id===duplicate.id);
- if(!current){setDuplicate(null);setMsg('Партия уже недоступна. Повторите добавление.');return;}
- if(Number(current.quantity)!==duplicate.currentQuantity){setDuplicate({...duplicate,currentQuantity:Number(current.quantity)});setMsg('Количество изменилось. Проверьте его ещё раз.');return;}
- setBusy(true);setMsg('');
- try{await onCommit('update',makeRow(current.id,current.products,action==='sum'?Number(current.quantity)+duplicate.newQuantity:duplicate.newQuantity,current),current);setDuplicate(null);onSaved()}catch(e){setMsg(e.message)}finally{setBusy(false)}
-};
- return (
-  <section className="sheet">
-
-   <div className="sheethead">
-    <h2>Добавить товар</h2>
-    <button className="close-button" aria-label="Закрыть" onClick={onClose}>
-     <X/>
-    </button>
-   </div>
-
-   <div className={'form-notice'+(msg?' has-message':'')} role="status">
-     {msg||'Введите штрихкод или воспользуйтесь камерой.'}
-   </div>
-
-   <button
-    className="scan"
-    onClick={scan}
-   >
-    <Camera/>
-    СКАНИРОВАТЬ ШТРИХКОД
-   </button>
-
-   {scanning&&(
-    <div className="scanner">
-
-     <div className="scanner-video">
-      <video
-       ref={videoRef}
-       autoPlay
-       playsInline
-       muted
-      />
-
-      <div className="scanner-frame"></div>
-     </div>
-
-     <div className="scanner-hint">
-      Наведите камеру на штрихкод
-     </div>
-
-     <button
-      onClick={()=>{
-       const controls=scannerRef.current;
-
-       try{
-        controls?.stop?.();
-       }catch{}
-
-       try{
-        controls?.reset?.();
-       }catch{}
-
-       scannerRef.current=null;
-       setScanning(false);
-      }}
-     >
-      ОТМЕНА
-     </button>
-
-    </div>
-   )}
-
-   <input
-    value={barcode}
-    onChange={e=>setBarcode(e.target.value)}
-    onBlur={()=>barcode&&find(barcode)}
-    aria-label="Штрихкод EAN" placeholder="Штрихкод EAN"
-    inputMode="numeric"
-   />
-
-   <input
-    value={name}
-    onChange={e=>setName(e.target.value)}
-    aria-label="Название товара" placeholder="Название товара"
-   />
-
-   <input
-    value={brand}
-    onChange={e=>setBrand(e.target.value)}
-    aria-label="Бренд" placeholder="Бренд (необязательно)"
-   />
-
-   <ExpiryCalculator onApply={setExpiry}/>
-
-   <label>
-    Годен до
-
-    <div
-     style={{
-      display:'grid',
-      gridTemplateColumns:'1fr 1.5fr 1fr',
-      gap:8,
-      marginTop:6
-     }}
-    >
-
-     <select
-      aria-label="День окончания срока" value={expiryDay}
-      onChange={e=>updateExpiry(
-       e.target.value,
-       expiryMonth,
-       expiryYear
-      )}
-     >
-      {Array.from(
-       {length:daysInMonth},
-       (_,i)=>i+1
-      ).map(day=>(
-       <option
-        key={day}
-        value={String(day).padStart(2,'0')}
-       >
-        {String(day).padStart(2,'0')}
-       </option>
-      ))}
-     </select>
-
-     <select
-      aria-label="Месяц окончания срока" value={expiryMonth}
-      onChange={e=>updateExpiry(
-       expiryDay,
-       e.target.value,
-       expiryYear
-      )}
-     >
-      {months.map((month,index)=>(
-       <option
-        key={index+1}
-        value={String(index+1).padStart(2,'0')}
-       >
-        {month}
-       </option>
-      ))}
-     </select>
-
-     <select
-      aria-label="Год окончания срока" value={expiryYear}
-      onChange={e=>updateExpiry(
-       expiryDay,
-       expiryMonth,
-       e.target.value
-      )}
-     >
-      {[...new Set([Number(expiryYear),...Array.from(
-       {length:6},
-       (_,i)=>new Date().getFullYear()+i
-      )])].sort((a,b)=>a-b).map(year=>(
-       <option
-        key={year}
-        value={year}
-       >
-        {year}
-       </option>
-      ))}
-     </select>
-
-    </div>
-   </label>
-
-   <label>
-    Количество
-    <input
-     type="number"
-     min="1"
-     value={qty}
-     onChange={e=>setQty(+e.target.value)}
-    />
-   </label>
-
-   <label>
-    Магазин
-    <select
-     value={store}
-     onChange={e=>setStore(e.target.value)}
-    >
-     {stores.map(s=>(
-      <option
-       key={s.id}
-       value={s.id}
-      >
-       {s.name}
-      </option>
-     ))}
-    </select>
-   </label>
-
-   <textarea
-    value={note}
-    onChange={e=>setNote(e.target.value)}
-    placeholder="Комментарий (необязательно)"
-   />
-
-   <button
-    className="primary"
-    disabled={busy}
-    onClick={save}
-   >
-    {busy?'СОХРАНЕНИЕ…':'СОХРАНИТЬ'}
-   </button>
-    {duplicate&&(
-      <div className="modal">
-        <div className="dialog">
-          <h2>Товар уже добавлен</h2>
-
-          <p><b>{duplicate.name}</b></p>
-
-          <p>
-            Срок годности: {
-              duplicate.expiry.split('-').reverse().join('.')
-            }
-          </p>
-
-          <p>Текущее количество: {duplicate.currentQuantity}</p>
-          <p>Новое количество: {duplicate.newQuantity}</p>
-
-          <button
-            className="primary"
-            disabled={busy}
-            onClick={()=>finishDuplicate('sum')}
-          >
-            Суммировать: {duplicate.currentQuantity} + {duplicate.newQuantity} = {
-              duplicate.currentQuantity+duplicate.newQuantity
-            }
-          </button>
-
-          <button
-            className="secondary"
-            disabled={busy}
-            onClick={()=>finishDuplicate('replace')}
-          >
-            Заменить: {duplicate.newQuantity}
-          </button>
-
-          <button
-            className="secondary"
-            disabled={busy}
-            onClick={()=>finishDuplicate('cancel')}
-          >
-            Отказаться
-          </button>
-        </div>
-      </div>
-    )}
-
-   </section>
- );
-}
-
 function Edit({x,stores,onClose,onSaved,onCommit,disposeOnly=false}){const [expiry,setExpiry]=useState(x.expiry_date),[qty,setQty]=useState(x.quantity),[store,setStore]=useState(x.store_id),[note,setNote]=useState(x.note||''),[busy,setBusy]=useState(false),[msg,setMsg]=useState('');
  const save=async()=>{
  if(!Number.isInteger(Number(qty))||Number(qty)<1||Number(qty)>2147483647){setMsg('Количество должно быть целым числом от 1 до 2147483647.');return;}
